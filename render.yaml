@@ -1,0 +1,33 @@
+# Cron Job do Render que roda o canal.
+#
+# O `schedule` do Render é sempre em UTC. Estes quatro horários são
+# 06:20, 13:20, 17:20 e 21:20 de Brasília (UTC-3) — espalhados pelo dia
+# brasileiro e em horas que não colidem com os cron jobs do automacao-video,
+# que já ocupam as horas UTC 2,3,6,7,10,11,14,15,18,19,22 e 23.
+#
+# O minuto 20 (em vez de 00) é de propósito: no minuto cheio o Render tem uma
+# fila bem maior de jobs de todo mundo disparando ao mesmo tempo.
+
+services:
+  - type: cron
+    name: gatinho-cria-rua
+    runtime: docker
+    plan: standard
+    region: virginia
+    schedule: '20 0,9,16,20 * * *'
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python main.py
+    autoDeploy: true
+    envVars:
+      # `sync: false` = o Render pergunta o valor na criação e nunca o guarda no
+      # repositório. É o que permite este repo ser público.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: YOUTUBE_CLIENT_ID
+        sync: false
+      - key: YOUTUBE_CLIENT_SECRET
+        sync: false
+      - key: YOUTUBE_REFRESH_TOKEN
+        sync: false
