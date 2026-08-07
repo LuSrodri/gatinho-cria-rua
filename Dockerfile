@@ -8,6 +8,12 @@ RUN apt-get update \
 
 WORKDIR /app
 
+# Sem isto o Python enfileira o stdout (a saída não é um terminal) e os logs do
+# Render só aparecem quando a execução termina — um job travado fica igual a um
+# job trabalhando. A execução leva minutos gerando imagem, então acompanhar o
+# progresso ao vivo é o que diz se ainda está de pé.
+ENV PYTHONUNBUFFERED=1
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
