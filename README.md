@@ -70,6 +70,9 @@ python main.py                  # gera e publica
 Precisa de `ffmpeg` no PATH (o `Dockerfile` já instala).
 
 O vídeo sai em `output/`, e cada publicação vira uma entrada em `videos.txt`.
+Os dois são locais: no Render o contêiner é descartado no fim de cada execução,
+então o histórico que vale lá é o do próprio canal (que `ultimos_publicados` lê
+da API) e os logs do serviço.
 
 ## Variáveis de ambiente
 

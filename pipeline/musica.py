@@ -58,13 +58,14 @@ def gerar_musica(cfg: Config, destino: Path) -> Path | None:
             },
             timeout=300,
         )
-        if resposta.status_code == 401:
-            print("[aviso] ELEVENLABS_API_KEY inválida (401); vídeo sairá mudo.")
-            return None
         if resposta.status_code != 200:
+            # A ElevenLabs devolve 401 tanto para chave errada quanto para chave
+            # CERTA sem escopo — e chaves de lá são restringíveis por endpoint.
+            # Repetir a mensagem da API em vez de adivinhar é o que separa
+            # "gere outra chave" de "marque music_generation nesta chave".
             print(
                 f"[aviso] ElevenLabs recusou a trilha ({resposta.status_code}): "
-                f"{resposta.text[:200]}. Vídeo sairá mudo."
+                f"{resposta.text[:300]}. Vídeo sairá mudo."
             )
             return None
         destino.write_bytes(resposta.content)
