@@ -32,17 +32,23 @@ def atualizar_env(chave: str, valor: str) -> None:
 
 # ---- Formato do Short --------------------------------------------------------
 
-# 8 imagens × 2,5s = 20s. Os três números andam juntos: mexer em um sem mexer
-# nos outros desalinha a barra de stories, as legendas e a trilha, que são
+# 8 imagens × 4s = 32s. Os três números andam juntos: mexer em um sem mexer nos
+# outros desalinha a barra de stories, as legendas e a trilha, que são
 # calculadas a partir deles.
+#
+# 4s por foto (e não 2,5s) porque a imagem passou a ser o produto: a 2,5s o olho
+# mal termina de varrer o quadro antes do corte, e todo detalhe que a foto tem —
+# a florada, o reflexo no asfalto, quem está no fundo — se perde. Em 4s a foto
+# respira, cabe legenda maior e o movimento de câmera tem tempo de acontecer.
 TOTAL_IMAGENS = 8
-DUR_IMAGEM = 2.5
+DUR_IMAGEM = 4.0
 DUR_TOTAL = TOTAL_IMAGENS * DUR_IMAGEM
 
 # Os 8 momentos do dia dele, na ordem. A rotina é FIXA de propósito — é o que
 # faz o canal ter formato reconhecível: o espectador sabe que começa no fim da
 # tarde e termina no busão. O que muda todo dia são os três beats do rolê
-# (índices 3, 4 e 5), onde o roteirista tem liberdade total.
+# (índices 3, 4 e 5), onde o roteirista tem liberdade total, e o recheio dos
+# âncoras, que é sorteado em variacao.py.
 BEATS = [
     ("acordar", "Ele acorda no fim da tarde, sol baixo entrando pela janela do quarto."),
     ("cafe", "O café dele, na laje ou na janela, com o pôr do sol na cidade ao fundo."),

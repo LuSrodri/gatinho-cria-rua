@@ -18,7 +18,10 @@ from .config import DUR_IMAGEM, Config
 # Fração da largura do vídeo que o texto pode ocupar. O Instagram deixa a caixa
 # respirar; texto colado na borda entrega que é legenda queimada, não story.
 LARGURA_UTIL = 0.76
-MAX_LINHAS = 2
+# Três linhas, e não duas: com a foto 4s na tela dá tempo de ler mais, e é
+# melhor uma terceira linha no corpo cheio do que espremer tudo em duas
+# encolhendo a fonte até a legenda sumir na foto.
+MAX_LINHAS = 3
 
 # Corpo da fonte em fração da largura do vídeo, e o piso ao encolher. Story é
 # lido de relance: abaixo de ~40px em 1080 a legenda deixa de competir com a
@@ -115,7 +118,9 @@ def gerar_legendas(cfg: Config, roteiro: dict, destino: Path) -> Path:
         conteudo = "\\N".join(linhas).replace("{", "(").replace("}", ")")
         ajuste = f"{{\\fs{tam}}}" if tam != corpo_base else ""
         # Fade curto nas pontas: o corte entre fotos é seco (é story), mas a
-        # legenda aparecendo de estalo junto com o corte pesa a leitura.
+        # legenda aparecendo de estalo junto com o corte pesa a leitura. Note
+        # que o fade é fixo, não proporcional à foto: 120ms é o tempo em que o
+        # olho aceita a caixa como "já estava lá".
         eventos.append(
             f"Dialogue: 0,{_ts(i * DUR_IMAGEM)},{_ts((i + 1) * DUR_IMAGEM)},"
             f"Story,,0,0,0,,{ajuste}{{\\fad(120,120)}}{conteudo}"

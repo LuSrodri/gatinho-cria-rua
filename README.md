@@ -1,25 +1,27 @@
 # Gatinho Cria da Rua
 
 Automação do canal [@GatinhoCriaDaRua](https://www.youtube.com/@GatinhoCriaDaRua).
-Cada execução gera e publica **um Short de 20 segundos**.
+Cada execução gera e publica **um Short de 32 segundos**.
 
 ## A ideia
 
-Um gato laranja de rua, adolescente, da periferia de São Paulo. Ele acorda no
-fim da tarde, toma um café na laje, chama o amigo **Black** (gato preto,
-simpático, sempre negociando alguma coisa), passa a noite no rolê e pega o busão
-para a escola quando o sol nasce. Todo dia.
+Um gato laranja de rua, adolescente, de um bairro arborizado da periferia de São
+Paulo. Ele acorda no fim da tarde, toma um café na laje, chama o amigo **Black**
+(gato preto, simpático, sempre negociando alguma coisa), passa a noite no rolê e
+pega o busão para a escola quando o sol nasce. Todo dia.
 
 O vídeo é o **story que ele postou**: 8 fotos tiradas por ele — ou selfie de
-pata esticada, ou foto que ele bateu de outros gatos —, 2,5 segundos cada, com
+pata esticada, ou foto que ele bateu de outros gatos —, 4 segundos cada, com
 legenda de story em cima e uma barra de stories correndo no topo.
 
 A rotina é fixa de propósito: é o que dá formato reconhecível ao canal. O que
-muda todo dia são os três beats do rolê.
+muda todo dia são os três beats do rolê e o que `variacao.py` sorteia.
 
 ## Como funciona
 
 ```
+variacao.sortear             o tempero de hoje: tempo, humor, visita, movimento
+        ↓
 youtube.ultimos_publicados   o que já foi ao ar, para o rolê de hoje não repetir
         ↓
 roteiro.gerar_roteiro        gpt-5.6-luna escreve os 8 beats e as 8 legendas
@@ -29,7 +31,7 @@ musica.gerar_musica          ElevenLabs compõe a trilha   ┘ esperas são de r
         ↓
 legendas.gerar_legendas      o .ass das caixas de story
         ↓
-video.montar_video           ffmpeg monta os 20s num passe só
+video.montar_video           ffmpeg monta os 32s num passe só
         ↓
 youtube.publicar             sobe o Short
 ```
@@ -44,17 +46,57 @@ referência em **todas** as chamadas ao `gpt-image-2` (`images.edit` aceita uma
 lista de referências e processa todas em alta fidelidade). Ela define o gato
 laranja e a estética do canal.
 
-O Black não tem referência commitada, então a foto em que ele aparece primeiro é
-gerada **antes** das outras e vira a referência dele no resto da execução — por
-isso a geração acontece em duas ondas.
+Os coadjuvantes (o Black e o convidado do dia) não têm referência commitada,
+então a primeira foto em que cada um aparece é gerada **antes** das outras e
+vira a referência dele no resto da execução — por isso a geração acontece em
+duas ondas.
+
+### A estética: periferia bonita
+
+A versão anterior pedia "celular barato, ruído de sensor, foco mole" atrás de
+autenticidade, num cenário de tijolo cru e laje precária. O que chegava era foto
+feia, e feia não retém ninguém.
+
+Duas correções, em `imagens.py`:
+
+- **o celular é bom.** Autenticidade vem do enquadramento (torto, na correria,
+  de baixo), não da qualidade ruim. Celular bom + mão de amador dá foto de story
+  bonita;
+- **o bairro é bonito.** Rua arborizada com ipê florido, casa pintada, jardim,
+  samambaia na varanda, laje com horta, calçada de pedra portuguesa, mural de
+  artista do bairro. Continua periferia — laje, portão, grade, fio de poste —,
+  mas a versão cuidada dela, que é a que a maior parte dela realmente é.
+
+### A variedade é sorteada em Python, não pedida ao modelo
+
+Quatro vídeos por dia com a mesma rotina viram o mesmo vídeo quatro vezes. Mas
+pedir "seja criativo" a um LLM devolve a média dele, que é justamente o
+lugar-comum.
+
+Então `variacao.py` sorteia, antes de qualquer chamada de API, o tempo que faz
+hoje, a época do ano no bairro, o humor dele, a forma do rolê, um "tempero" que
+atravessa as 8 fotos, quem do elenco recorrente aparece, quantas fotos são
+selfie e o movimento de câmera de cada foto. Isso entra no prompt como **fato
+dado**, não como opção — dar a escolha de volta ao modelo desfaz o sorteio.
+
+O esqueleto nunca é sorteado: os 8 beats, a estética, a voz, o gato, o Black e a
+trilha. É a constância que faz o canal ser reconhecível; o sorteio mexe só no
+recheio.
+
+A semente é `data-hora` do run, então as quatro execuções do dia saem diferentes
+e um run é reproduzível — a semente vai no log.
 
 ### A barra de stories
 
 O preenchimento de cada divisão é feito em degraus com `enable`, não com uma
 largura em função de `t`. Motivo: o `drawbox` do ffmpeg resolve `w` uma única
-vez, na inicialização — só o `enable` é reavaliado quadro a quadro. Com 25
-degraus por divisão (~5px cada), a 30fps não se distingue de um preenchimento
+vez, na inicialização — só o `enable` é reavaliado quadro a quadro. Com 40
+degraus por divisão (~3px cada), a 30fps não se distingue de um preenchimento
 contínuo.
+
+São 40 degraus × 8 fotos, e o filtergraph passa de 30 mil caracteres — mais do
+que cabe numa linha de comando do Windows. Por isso ele vai num arquivo, com
+`-filter_complex_script`.
 
 ## Rodando
 

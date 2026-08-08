@@ -18,16 +18,17 @@ API_MUSICA = "https://api.elevenlabs.io/v1/music"
 # implícita da geração.
 PROMPT = """\
 Instrumental lo-fi hip hop for a short film about a teenage street cat wandering
-the outskirts of São Paulo at golden hour and through the night.
+a leafy neighbourhood on the outskirts of São Paulo at golden hour and through
+the night.
 
 Dusty boom-bap drums, soft and unhurried, around 75 BPM. A warm, slightly
-detuned electric piano playing a simple melancholic loop. A round, gentle bass
-line. Underneath it all: vinyl crackle, distant traffic, the hum of a warm
-evening.
+detuned electric piano playing a simple tender loop in a major key. A round,
+gentle bass line. A soft nylon-string guitar figure somewhere underneath.
+Vinyl crackle, distant traffic, the hum of a warm evening.
 
-The feeling is intimate and a little wistful — nostalgic but not sad, calm but
-awake. Nothing dramatic, no build, no drop. It should feel like a loop you could
-stare out of a bus window to.
+The feeling is intimate, warm and quietly hopeful — nostalgic but content, calm
+but awake. Nothing dramatic, no build, no drop. It should feel like a loop you
+could stare out of a bus window to on a good morning.
 
 No vocals, no lyrics, no voices."""
 

@@ -2,8 +2,9 @@
 
 O vídeo é montado como um story do Instagram assistido de fora:
 
-- as 8 fotos em corte seco, 2,5s cada, com um zoom lento (foto parada por 2,5s
-  lê como travada; o zoom devolve vida sem inventar movimento que não existe);
+- as 8 fotos em corte seco, 4s cada, com um movimento lento de câmera sorteado
+  foto a foto (foto parada por 4s lê como travada; o movimento devolve vida sem
+  inventar ação que não existe);
 - a barra segmentada de stories no topo, uma divisão por foto, preenchendo em
   tempo real;
 - o @ do canal logo abaixo dela;
@@ -28,6 +29,7 @@ from pathlib import Path
 from PIL import Image
 
 from .config import DUR_IMAGEM, DUR_TOTAL, RAIZ, Config
+from .variacao import Movimento, Variacao
 
 # Barra de stories, em pixels para um vídeo de 1080 de largura (escalada
 # proporcionalmente para outras larguras).
@@ -35,8 +37,9 @@ BARRA_MARGEM = 24
 BARRA_TOPO = 26
 BARRA_ALTURA = 6
 BARRA_VAO = 6
-# Degraus do preenchimento de cada divisão (ver _barra_stories).
-PASSOS = 25
+# Degraus do preenchimento de cada divisão (ver _barra_stories). Dimensionado
+# para o degrau durar ~0,1s: com a foto em 4s, 25 degraus já se veem pular.
+PASSOS = 40
 
 # Véu escuro do topo, para a barra e o @ não sumirem numa foto de céu claro.
 DEGRADE_ALTURA = 0.115  # fração da altura do vídeo
@@ -63,31 +66,44 @@ def _gradiente(cfg: Config, destino: Path) -> Path:
     return destino
 
 
-def _zoom(indice: int, frames: int) -> str:
-    """Expressão de zoom da foto: ímpares fecham, pares abrem.
+def _deslocamento(mov: Movimento, lado: int, direcao: int) -> float:
+    """Quantos pixels de entrada a câmera pode varrer neste eixo.
 
-    Alternar a direção evita a sensação de esteira que dá quando oito fotos
-    seguidas fazem exatamente o mesmo movimento.
+    O zoompan grampeia x e y na faixa válida sem avisar, e a faixa depende do
+    zoom: no zoom mínimo do movimento sobra apenas ``lado * (1 - 1/z)/2`` para
+    cada lado. Calcular a margem a partir do zoom MÍNIMO é o que impede o pan de
+    bater no limite no meio do trajeto e travar — um travamento desses lê como
+    vídeo com defeito, não como escolha.
     """
-    fim = max(frames - 1, 1)
-    if indice % 2 == 0:
-        return f"1.0+0.10*on/{fim}"
-    return f"1.10-0.10*on/{fim}"
+    if not direcao:
+        return 0.0
+    z_min = min(mov.z_ini, mov.z_fim)
+    return lado * (1 - 1 / z_min) / 2 * mov.pan * direcao
 
 
-def _cadeia_foto(indice: int, cfg: Config, frames: int) -> str:
-    """Filtro que transforma uma foto 2:3 em um clipe 9:16 com zoom."""
+def _cadeia_foto(indice: int, cfg: Config, frames: int, mov: Movimento) -> str:
+    """Filtro que transforma uma foto 2:3 em um clipe 9:16 com movimento."""
     # O gpt-image-2 entrega 1024x1536 (2:3) e o Short é 9:16: a foto é ampliada
-    # até cobrir e cortada no centro. Trabalhar o zoom no dobro da resolução
+    # até cobrir e cortada no centro. Trabalhar o movimento no dobro da resolução
     # final e só então reduzir é o que tira o tremor do zoompan.
     largura = cfg.video_largura * 2
     altura = cfg.video_altura * 2
+    fim = max(frames - 1, 1)
+
+    # `p` vai de 0 a 1 ao longo da foto. O zoom é linear nele, e o pan vai de
+    # -desloc a +desloc (daí o `2*p-1`), passando pelo centro no meio da foto.
+    p = f"(on/{fim})"
+    zoom = f"{mov.z_ini:.4f}+{mov.z_fim - mov.z_ini:.4f}*{p}"
+    dx = _deslocamento(mov, largura, mov.dir_x)
+    dy = _deslocamento(mov, altura, mov.dir_y)
+    x = f"iw/2-(iw/zoom/2)+({dx:.1f})*(2*{p}-1)"
+    y = f"ih/2-(ih/zoom/2)+({dy:.1f})*(2*{p}-1)"
+
     return (
         f"[{indice}:v]"
         f"scale={largura}:{altura}:force_original_aspect_ratio=increase,"
         f"crop={largura}:{altura},"
-        f"zoompan=z='{_zoom(indice, frames)}'"
-        f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+        f"zoompan=z='{zoom}':x='{x}':y='{y}'"
         f":d={frames}:s={cfg.video_largura}x{cfg.video_altura}:fps={cfg.fps},"
         f"setsar=1[v{indice}]"
     )
@@ -153,7 +169,12 @@ def _handle(cfg: Config) -> str:
 
 
 def montar_video(
-    cfg: Config, imagens: list[Path], legendas: Path, musica: Path | None, destino: Path
+    cfg: Config,
+    var: Variacao,
+    imagens: list[Path],
+    legendas: Path,
+    musica: Path | None,
+    destino: Path,
 ) -> Path:
     """Monta o Short e devolve o caminho do arquivo final."""
     if shutil.which("ffmpeg") is None:
@@ -175,7 +196,9 @@ def montar_video(
         # sem virar também um upload recusado.
         comando += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"]
 
-    cadeias = [_cadeia_foto(i, cfg, frames) for i in range(total)]
+    cadeias = [
+        _cadeia_foto(i, cfg, frames, var.movimentos[i]) for i in range(total)
+    ]
     concat = "".join(f"[v{i}]" for i in range(total)) + f"concat=n={total}:v=1:a=0[seq]"
 
     # A ORDEM importa: o véu vai primeiro, e barra e @ vêm por cima dele. Ao
@@ -201,8 +224,19 @@ def montar_video(
         f"aformat=sample_rates=44100:channel_layouts=stereo[aout]"
     )
 
+    # O filtergraph vai em ARQUIVO, não na linha de comando. Ele passa de 30 mil
+    # caracteres (são PASSOS degraus de barra por foto), e o Windows corta a
+    # linha de comando em 32.767 — o erro que aparece lá é "o nome do arquivo ou
+    # a extensão é muito grande", que não sugere nem de longe o motivo real. O
+    # Linux do contêiner aguentaria, mas um pipeline que só monta vídeo no
+    # servidor é um pipeline que não dá para testar.
+    filtro = cfg.saida / "filtro.txt"
+    filtro.write_text(
+        ";".join(cadeias + [concat, veu_overlay, video, audio]), encoding="utf-8"
+    )
+
     comando += [
-        "-filter_complex", ";".join(cadeias + [concat, veu_overlay, video, audio]),
+        "-filter_complex_script", str(filtro.relative_to(RAIZ).as_posix()),
         "-map", "[vout]",
         "-map", "[aout]",
         "-t", str(DUR_TOTAL),
