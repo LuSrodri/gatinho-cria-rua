@@ -37,6 +37,9 @@ from .variacao import Variacao
 MIN_PALAVRAS = 3
 MAX_PALAVRAS = 6
 
+# Quantas vezes pedir o roteiro antes de desistir do run (ver gerar_roteiro).
+TENTATIVAS = 3
+
 # Teto de caracteres. Seis palavras compridas ainda estouram duas linhas a 76px,
 # e a legenda encolheria até deixar de competir com a foto.
 MAX_LEGENDA = 44
@@ -93,7 +96,17 @@ ESQUEMA = {
                     "type": "object",
                     "additionalProperties": False,
                     "properties": {
-                        "beat": {"type": "string"},
+                        # `enum`, e não string livre. O modo estrito da OpenAI não
+                        # aceita `minItems`/`maxItems`, então a QUANTIDADE de cenas
+                        # não é exigível pelo schema — e um run de 16 beats já
+                        # voltou com 17 cenas, abortando a execução. O que dá para
+                        # exigir é o NOME de cada beat; com ele fechado, a lista
+                        # vira reconciliável por nome em `_alinhar`, e a contagem
+                        # deixa de importar.
+                        "beat": {
+                            "type": "string",
+                            "enum": [nome for nome, _ in BEATS],
+                        },
                         "foto": {
                             "type": "string",
                             "enum": ["selfie", "outros"],
@@ -294,6 +307,10 @@ canal. São {len(BEATS)} fotos, exatamente uma por beat, na ordem abaixo.
 OS {len(BEATS)} BEATS (obrigatórios, nesta ordem — use o nome do beat no campo "beat")
 {roteiro_beats}
 
+"cenas" tem EXATAMENTE {len(BEATS)} objetos, um por beat da lista acima, na
+ordem acima. Nem {len(BEATS) - 1}, nem {len(BEATS) + 1}. Nenhum beat repetido,
+nenhum beat de fora, nenhuma cena extra. Confira a contagem antes de responder.
+
 Os beats {_numerar(BEATS_ANCORA)} são âncoras: a FUNÇÃO deles não muda, mas o
 detalhe sim, e o detalhe de hoje já está definido abaixo.
 
@@ -319,35 +336,86 @@ o corte a cada 2s, alternar entre ele e o que ele vê é o que dá respiração.
 {ESTETICA}"""
 
 
+class _RoteiroInvalido(Exception):
+    """O roteiro voltou fora do formato. Vale pedir outro, não vale abortar."""
+
+
+def _alinhar(cenas: list[dict]) -> list[dict]:
+    """Devolve exatamente uma cena por beat, na ordem de BEATS.
+
+    A quantidade de cenas é a única parte do formato que o schema não consegue
+    exigir (o modo estrito não tem `minItems`/`maxItems`), e com 16 beats o
+    modelo erra a conta de vez em quando — o primeiro run com o formato novo
+    voltou com 17. Como o nome do beat é `enum`, dá para reconstruir a lista por
+    nome em vez de confiar na ordem e no comprimento: cena a mais é descartada,
+    cena fora de ordem volta para o lugar, e beat repetido fica com a primeira
+    ocorrência (a segunda costuma ser a improvisada).
+
+    O que NÃO dá para consertar aqui é beat faltando: inventar uma cena para
+    tapar o buraco produziria uma foto que não pertence ao dia. Aí é caso de
+    pedir outro roteiro.
+    """
+    por_beat: dict[str, dict] = {}
+    for cena in cenas:
+        nome = (cena.get("beat") or "").strip().lower()
+        if nome and nome not in por_beat:
+            por_beat[nome] = cena
+
+    faltando = [nome for nome, _ in BEATS if nome not in por_beat]
+    if faltando:
+        raise _RoteiroInvalido(
+            f"vieram {len(cenas)} cenas e faltou o beat: {', '.join(faltando)}"
+        )
+
+    alinhadas = [por_beat[nome] for nome, _ in BEATS]
+    if len(cenas) != len(alinhadas):
+        print(
+            f"[roteiro] O modelo devolveu {len(cenas)} cenas para {len(BEATS)} "
+            "beats; realinhado pelo nome do beat."
+        )
+    return alinhadas
+
+
 def gerar_roteiro(cfg: Config, var: Variacao, recentes: list[dict]) -> dict:
     """Devolve o roteiro do dia já validado (16 cenas, legendas no tamanho)."""
     print("[roteiro] Escrevendo o dia de hoje...")
     print(var.resumo())
     cliente = OpenAI(api_key=cfg.openai_api_key)
-    resposta = cliente.chat.completions.create(
-        model=cfg.text_model,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "Você escreve um canal de Shorts em português do Brasil sobre "
-                    "um gato de rua adolescente da periferia paulista. Você é bom "
-                    "em observar o pequeno detalhe que faz a cena parecer real. "
-                    "Você nunca escreve legenda genérica."
-                ),
-            },
-            {"role": "user", "content": _prompt(var, recentes)},
-        ],
-        response_format={"type": "json_schema", "json_schema": ESQUEMA},
-    )
-    roteiro = json.loads(resposta.choices[0].message.content)
 
-    cenas = roteiro.get("cenas") or []
-    if len(cenas) != len(BEATS):
-        raise SystemExit(
-            f"O roteiro veio com {len(cenas)} cenas, e o formato exige "
-            f"{len(BEATS)}. Abortando antes de gastar imagem."
+    # Vale a pena repetir a chamada: o roteiro é a etapa BARATA da execução (uma
+    # chamada de texto contra 16 de imagem), e ele é o que decide se as outras
+    # acontecem. Desistir na primeira resposta torta é perder o run inteiro —
+    # e o cron só volta daqui a algumas horas.
+    for tentativa in range(1, TENTATIVAS + 1):
+        resposta = cliente.chat.completions.create(
+            model=cfg.text_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Você escreve um canal de Shorts em português do Brasil sobre "
+                        "um gato de rua adolescente da periferia paulista. Você é bom "
+                        "em observar o pequeno detalhe que faz a cena parecer real. "
+                        "Você nunca escreve legenda genérica."
+                    ),
+                },
+                {"role": "user", "content": _prompt(var, recentes)},
+            ],
+            response_format={"type": "json_schema", "json_schema": ESQUEMA},
         )
+        roteiro = json.loads(resposta.choices[0].message.content)
+        try:
+            cenas = _alinhar(roteiro.get("cenas") or [])
+            break
+        except _RoteiroInvalido as erro:
+            if tentativa == TENTATIVAS:
+                raise SystemExit(
+                    f"O roteiro veio fora do formato {TENTATIVAS} vezes ({erro}). "
+                    "Abortando antes de gastar imagem."
+                ) from erro
+            print(f"[roteiro] Roteiro fora do formato ({erro}); pedindo outro.")
+
+    roteiro["cenas"] = cenas
 
     # Legenda estourada é falha de layout, não de conteúdo: cortar aqui é melhor
     # do que deixar a caixa de story cobrir metade da foto. O corte é sempre em
