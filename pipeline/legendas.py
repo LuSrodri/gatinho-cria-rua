@@ -6,28 +6,32 @@ linha. No ASS isso é ``BorderStyle: 3`` (caixa opaca), que desenha um retângul
 por LINHA usando a cor de contorno — que é exatamente o efeito escalonado do
 Instagram quando o texto quebra em duas linhas.
 
-Uma legenda por imagem: ela entra junto com a foto e sai junto com ela.
+Uma legenda por imagem: ela entra junto com a foto e sai junto com ela, em corte
+seco. A legenda é o marcador de corte mais visível que o vídeo tem — trocar de
+frase é o que o olho percebe primeiro —, então ela não desliza nem esmaece.
 """
 
 from pathlib import Path
 
 from PIL import ImageFont
 
-from .config import DUR_IMAGEM, Config
+from .config import DURACOES, INICIOS, Config
 
 # Fração da largura do vídeo que o texto pode ocupar. O Instagram deixa a caixa
 # respirar; texto colado na borda entrega que é legenda queimada, não story.
-LARGURA_UTIL = 0.76
-# Três linhas, e não duas: com a foto 4s na tela dá tempo de ler mais, e é
-# melhor uma terceira linha no corpo cheio do que espremer tudo em duas
-# encolhendo a fonte até a legenda sumir na foto.
-MAX_LINHAS = 3
+LARGURA_UTIL = 0.80
+# Duas linhas, não três. A legenda agora tem de 3 a 6 palavras (roteiro.py) e
+# fica 2s na tela: o que não se lê num relance não se lê. Uma terceira linha só
+# existiria para acomodar frase comprida, e frase comprida é o problema, não a
+# falta de linha.
+MAX_LINHAS = 2
 
-# Corpo da fonte em fração da largura do vídeo, e o piso ao encolher. Story é
-# lido de relance: abaixo de ~40px em 1080 a legenda deixa de competir com a
-# foto e vira ruído.
-CORPO = 0.050
-CORPO_MINIMO = 40
+# Corpo da fonte em fração da largura do vídeo, e o piso ao encolher. Subiu de
+# 0,050 para 0,070 (54 → 76px em 1080) junto com o encurtamento da frase: são a
+# mesma decisão vista de dois lados. Menos palavras maiores se leem no tempo do
+# corte; mais palavras menores, não.
+CORPO = 0.070
+CORPO_MINIMO = 54
 
 # Altura da caixa a partir da base, em fração da altura. Fica no terço inferior,
 # livre da barra de stories no topo e do rodapé da interface do Shorts.
@@ -117,13 +121,15 @@ def gerar_legendas(cfg: Config, roteiro: dict, destino: Path) -> Path:
         # engoliria o resto da linha.
         conteudo = "\\N".join(linhas).replace("{", "(").replace("}", ")")
         ajuste = f"{{\\fs{tam}}}" if tam != corpo_base else ""
-        # Fade curto nas pontas: o corte entre fotos é seco (é story), mas a
-        # legenda aparecendo de estalo junto com o corte pesa a leitura. Note
-        # que o fade é fixo, não proporcional à foto: 120ms é o tempo em que o
-        # olho aceita a caixa como "já estava lá".
+        # Sem `\fad`. A versão anterior tinha 120ms de fade em cada ponta para a
+        # legenda não aparecer de estalo — o que fazia sentido com a foto 4s na
+        # tela. Com 2s, esses 240ms são 12% do tempo da legenda gastos em texto
+        # meio transparente, e o pior: eles borram justamente a fronteira entre
+        # uma foto e a próxima, que é o que agora precisa ser inequívoco. A
+        # legenda troca junto com o corte, no mesmo quadro.
         eventos.append(
-            f"Dialogue: 0,{_ts(i * DUR_IMAGEM)},{_ts((i + 1) * DUR_IMAGEM)},"
-            f"Story,,0,0,0,,{ajuste}{{\\fad(120,120)}}{conteudo}"
+            f"Dialogue: 0,{_ts(INICIOS[i])},{_ts(INICIOS[i] + DURACOES[i])},"
+            f"Story,,0,0,0,,{ajuste}{conteudo}"
         )
 
     destino.write_text(corpo + "\n".join(eventos) + "\n", encoding="utf-8")

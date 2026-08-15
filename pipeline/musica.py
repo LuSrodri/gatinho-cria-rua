@@ -2,14 +2,15 @@
 
 Música gerada em vez de biblioteca de faixas por um motivo prático: faixa
 licenciada de terceiro é o caminho mais curto para um Content ID em cima do
-canal. O que sai daqui é instrumental, original e do tamanho exato do vídeo.
+canal. O que sai daqui é instrumental, original, e um pouco mais longo que o
+vídeo de propósito — a sobra é o que costura o loop.
 """
 
 from pathlib import Path
 
 import requests
 
-from .config import DUR_TOTAL, Config
+from .config import CAUDA_LOOP, DUR_TOTAL, Config
 
 API_MUSICA = "https://api.elevenlabs.io/v1/music"
 
@@ -29,6 +30,12 @@ Vinyl crackle, distant traffic, the hum of a warm evening.
 The feeling is intimate, warm and quietly hopeful — nostalgic but content, calm
 but awake. Nothing dramatic, no build, no drop. It should feel like a loop you
 could stare out of a bus window to on a good morning.
+
+IT IS A LOOP, NOT A PIECE. Stay in the same key and the same groove from the
+first bar to the last. Do not build toward anything, do not resolve, and above
+all do not end: no final chord, no ritardando, no cymbal swell, no fade-out. The
+last bars must sound like they are handing straight back to the first ones, so
+that playing the track twice in a row has no seam.
 
 No vocals, no lyrics, no voices."""
 
@@ -51,9 +58,12 @@ def gerar_musica(cfg: Config, destino: Path) -> Path | None:
             },
             json={
                 "prompt": PROMPT,
-                # Um pouco mais longa que o vídeo: sobra é aparada com fade no
-                # ffmpeg, enquanto faixa curta demais deixaria silêncio no fim.
-                "music_length_ms": int((DUR_TOTAL + 2) * 1000),
+                # A sobra de CAUDA_LOOP segundos não é margem de segurança: é
+                # matéria-prima. O ffmpeg cruza esses segundos por cima do começo
+                # da faixa para a trilha dar a volta no loop sem emenda (ver o
+                # filtro de áudio em video.py). Pedir exatamente DUR_TOTAL
+                # deixaria o vídeo sem o material do cruzamento.
+                "music_length_ms": int((DUR_TOTAL + CAUDA_LOOP) * 1000),
                 "model_id": cfg.musica_model,
                 "force_instrumental": True,
             },

@@ -15,7 +15,7 @@ O que é sorteado (o recheio):
   variantes dos beats-âncora e o movimento de câmera de cada foto.
 
 O que NUNCA é sorteado (o esqueleto):
-  os 8 beats, a estética, a voz das legendas, o gato, o Black e a trilha.
+  os 16 beats, a estética, a voz das legendas, o gato, o Black e a trilha.
 
 A semente é a data + a hora do run, então:
   - as quatro execuções de um mesmo dia saem diferentes;
@@ -181,7 +181,7 @@ FORMAS = [
     "um CUIDADO: eles tomam conta de alguém menor pelo resto da noite",
 ]
 
-# O tempero: um fio solto que atravessa as 8 fotos. Uma coisa só, pequena.
+# O tempero: um fio solto que atravessa as 16 fotos. Uma coisa só, pequena.
 TEMPEROS = [
     "ele está juntando dinheiro (do jeito dele) para alguma coisa",
     "ele achou um objeto no caminho e carrega o dia inteiro",
@@ -226,6 +226,23 @@ ANCORAS = {
         "sobe na caixa d'água para enxergar longe",
         "bate na grade com a pata, três vezes",
     ],
+    "o que ele vê da rua quando ainda está mole": [
+        "as crianças voltando da escola no fim da tarde",
+        "o vizinho regando o jardim, a água escurecendo a calçada",
+        "a roupa balançando no varal da laje de frente",
+        "o portão da padaria sendo aberto para a noite",
+        "os pardais brigando pelo último sol no fio",
+        "um carro velho sendo lavado na porta de casa",
+        "a sombra do ipê andando devagar pelo muro",
+    ],
+    "por onde eles voltam na madrugada": [
+        "pela viela da escadaria, degrau por degrau",
+        "pelo meio da rua vazia, os dois no asfalto",
+        "pela calçada da padaria, cortando o cheiro do pão",
+        "por cima dos muros, o caminho de gato",
+        "pelo campinho apagado, atravessando o gramado molhado",
+        "pela beira da praça, no orvalho do banco",
+    ],
     "de onde ele vê o nascer do sol": [
         "da laje mais alta da rua",
         "de cima da passarela",
@@ -245,9 +262,9 @@ ANCORAS = {
     ],
 }
 
-# Quantas fotos são de OUTROS gatos (o resto é selfie). Faixa, não número fixo:
-# um vídeo com 3 selfies e outro com 5 já parecem vídeos diferentes.
-FAIXA_OUTROS = (3, 5)
+# Quantas das 16 fotos são de OUTROS gatos (o resto é selfie). Faixa, não número
+# fixo: um vídeo com 6 selfies e outro com 10 já parecem vídeos diferentes.
+FAIXA_OUTROS = (6, 10)
 
 # Chance de ter alguém do elenco no rolê de hoje. Não é 100% porque noite de
 # rolê só dos dois também precisa existir — senão a "visita" deixa de ser visita.
@@ -259,9 +276,16 @@ CHANCE_CONVIDADO = 0.7
 # Amplitudes do zoom lento de cada foto, e o quanto do espaço disponível a
 # câmera pode varrer. Suave de propósito: movimento que se percebe vira efeito,
 # e o vídeo tem que continuar parecendo um story, não um trailer.
+#
+# As duas faixas são POR SEGUNDO, e não por foto. É o que importa quando as
+# fotos deixam de ter todas a mesma duração: a mesma amplitude de zoom em 2s é o
+# dobro da velocidade que era em 4s, e o dobro da velocidade é onde o Ken Burns
+# para de parecer respiração e passa a parecer efeito. Multiplicando pela
+# duração, a foto de 1s e a de 2s se movem no mesmo ritmo — só percorrem
+# distâncias diferentes.
 ZOOM_BASE = 1.08  # piso do zoom — precisa sobrar margem para o pan existir
-ZOOM_AMPLITUDE = (0.06, 0.13)
-PAN_FRACAO = (0.0, 0.75)  # fração da margem disponível que o pan realmente usa
+ZOOM_TAXA = (0.015, 0.033)  # amplitude de zoom por segundo de foto
+PAN_TAXA = (0.0, 0.19)  # fração da margem disponível varrida por segundo
 
 DIRECOES = [
     (0, 0),  # parado no centro
@@ -284,7 +308,7 @@ class Movimento:
     z_fim: float
     dir_x: int
     dir_y: int
-    pan: float  # fração de PAN_FRACAO já sorteada
+    pan: float  # fração da margem varrida, já sorteada e já escalada pela duração
 
 
 @dataclass
@@ -321,17 +345,22 @@ class Variacao:
         )
 
 
-def _movimentos(rng: random.Random, total: int) -> list[Movimento]:
-    """Sorteia o movimento de cada foto, sem repetir o anterior.
+def _movimentos(rng: random.Random, duracoes: list[float]) -> list[Movimento]:
+    """Sorteia o movimento de cada foto, sem repetir o da anterior.
 
-    A regra de não repetir é o ponto: oito fotos com o mesmo zoom dão sensação
-    de esteira transportadora, e é isso que denuncia que o vídeo é montado.
+    A regra de não repetir é o ponto: dezesseis fotos com o mesmo zoom dão
+    sensação de esteira transportadora, e é isso que denuncia que o vídeo é
+    montado. Com o corte a cada 2s ela pesa ainda mais do que pesava a cada 4s —
+    a repetição aparece no dobro da frequência.
+
+    A direção nova a cada corte também é o que marca a fronteira entre as fotos:
+    a câmera recomeça visivelmente, em vez de dar a impressão de continuar.
     """
     movimentos: list[Movimento] = []
     fecha = rng.random() < 0.5
     anterior = None
-    for _ in range(total):
-        amplitude = rng.uniform(*ZOOM_AMPLITUDE)
+    for duracao in duracoes:
+        amplitude = rng.uniform(*ZOOM_TAXA) * duracao
         z_ini, z_fim = (
             (ZOOM_BASE, ZOOM_BASE + amplitude)
             if fecha
@@ -341,7 +370,13 @@ def _movimentos(rng: random.Random, total: int) -> list[Movimento]:
         direcao = rng.choice(opcoes)
         anterior = direcao
         movimentos.append(
-            Movimento(z_ini, z_fim, direcao[0], direcao[1], rng.uniform(*PAN_FRACAO))
+            Movimento(
+                z_ini,
+                z_fim,
+                direcao[0],
+                direcao[1],
+                rng.uniform(*PAN_TAXA) * duracao,
+            )
         )
         # Alterna a direção do zoom na maior parte das vezes, mas nem sempre:
         # alternância perfeita é um padrão, e padrão também fica previsível.
@@ -349,8 +384,13 @@ def _movimentos(rng: random.Random, total: int) -> list[Movimento]:
     return movimentos
 
 
-def sortear(total_fotos: int, quando: datetime | None = None) -> Variacao:
-    """Sorteia o dia de hoje. A semente é a data + a hora do run."""
+def sortear(duracoes: list[float], quando: datetime | None = None) -> Variacao:
+    """Sorteia o dia de hoje. A semente é a data + a hora do run.
+
+    Recebe as durações das fotos, e não a quantidade delas, porque o movimento
+    de câmera é sorteado em taxa por segundo: a foto de abertura, mais curta,
+    precisa de uma amplitude menor para se mover no mesmo ritmo das outras.
+    """
     agora = quando or datetime.now()
     semente = agora.strftime("%Y-%m-%d-%H")
     rng = random.Random(semente)
@@ -369,5 +409,5 @@ def sortear(total_fotos: int, quando: datetime | None = None) -> Variacao:
         ancoras={rotulo: rng.choice(opcoes) for rotulo, opcoes in ANCORAS.items()},
         convidado=convidado,
         quantas_outros=rng.randint(*FAIXA_OUTROS),
-        movimentos=_movimentos(rng, total_fotos),
+        movimentos=_movimentos(rng, duracoes),
     )

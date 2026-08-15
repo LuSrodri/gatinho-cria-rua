@@ -3,8 +3,9 @@
 Um gato laranja de rua, adolescente, de um bairro arborizado da periferia de São
 Paulo. Ele acorda no fim da tarde, toma um café, chama o amigo Black, passa a
 noite no rolê e pega o busão para a escola quando o sol nasce. Todo dia. O vídeo
-é o story que ele postou: 8 fotos tiradas por ele, 4 segundos cada, 32 segundos
-no total.
+é o story que ele postou: 16 fotos tiradas por ele, 2 segundos cada (a primeira
+1s), 31 segundos no total — e o fim volta para o começo sem emenda, porque o
+Short reinicia sozinho e o último beat do dia é vizinho do primeiro.
 
     python main.py                  # gera e publica
     python main.py --sem-publicar   # gera e para (para conferir o arquivo)
@@ -15,8 +16,8 @@ Passo a passo:
 1. variacao.sortear — o tempero de hoje (tempo, humor, visita, movimento). É a
    primeira coisa da execução porque todo o resto é escrito em cima dele.
 2. youtube.ultimos_publicados — o que já foi ao ar, para não repetir o rolê.
-3. roteiro.gerar_roteiro (gpt-5.6-luna) — os 8 beats do dia e as legendas.
-4. imagens.gerar_imagens (gpt-image-2) — as 8 fotos, com o mesmo gato em todas.
+3. roteiro.gerar_roteiro (gpt-5.6-luna) — os 16 beats do dia e as legendas.
+4. imagens.gerar_imagens (gpt-image-2) — as 16 fotos, com o mesmo gato em todas.
    musica.gerar_musica (ElevenLabs) roda em paralelo, porque as duas esperas são
    de rede e não dependem uma da outra.
 5. legendas.gerar_legendas — o .ass das caixas de story.
@@ -41,7 +42,7 @@ from pipeline import (
     video,
     youtube,
 )
-from pipeline.config import TOTAL_IMAGENS, carregar_config
+from pipeline.config import DURACOES, carregar_config
 
 
 def _nome_arquivo(titulo: str, limite: int = 60) -> str:
@@ -77,7 +78,7 @@ def main() -> None:
     # O sorteio vem antes de tudo: o roteiro é escrito em cima dele, as imagens
     # herdam o tempo do dia e o vídeo herda o movimento de câmera. Uma semente
     # só para a execução inteira é o que mantém as três coisas coerentes.
-    var = variacao.sortear(TOTAL_IMAGENS, inicio)
+    var = variacao.sortear(DURACOES, inicio)
 
     recentes = youtube.ultimos_publicados(cfg)
     plano = roteiro.gerar_roteiro(cfg, var, recentes)

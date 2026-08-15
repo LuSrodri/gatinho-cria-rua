@@ -24,12 +24,22 @@ from datetime import datetime
 
 from openai import OpenAI
 
-from .config import BEATS, Config
+from .config import BEATS, BEATS_ROLE, Config
 from .variacao import Variacao
 
-# Teto de caracteres da legenda. Não é estética: é o que cabe em até três linhas
-# na caixa de story sem virar parede de texto nos 4s que a imagem fica na tela.
-MAX_LEGENDA = 84
+# A legenda em palavras, não em caracteres. Contar palavra é o que dá para pedir
+# a um modelo e ele cumprir; o teto de caracteres continua existindo, mas como
+# rede de segurança do layout, não como a regra.
+#
+# De 3 a 6 palavras porque a foto fica 2s na tela e o corpo da fonte subiu para
+# 76px (legendas.py): é o que cabe em duas linhas grandes e se lê num relance.
+# Menos de 3 vira legenda-etiqueta ("café"), que não tem voz nenhuma.
+MIN_PALAVRAS = 3
+MAX_PALAVRAS = 6
+
+# Teto de caracteres. Seis palavras compridas ainda estouram duas linhas a 76px,
+# e a legenda encolheria até deixar de competir com a foto.
+MAX_LEGENDA = 44
 
 # Sementes de rolê. Não entram no prompt como lista fechada de escolhas — entram
 # como EXEMPLOS do nível de especificidade que se espera. Sem elas o modelo cai
@@ -105,7 +115,8 @@ ESQUEMA = {
                         "legenda": {
                             "type": "string",
                             "description": (
-                                f"PORTUGUÊS. Máximo {MAX_LEGENDA} caracteres. A "
+                                f"PORTUGUÊS. De {MIN_PALAVRAS} a {MAX_PALAVRAS} "
+                                f"palavras, no máximo {MAX_LEGENDA} caracteres. A "
                                 "legenda do story, na voz dele."
                             ),
                         },
@@ -134,7 +145,7 @@ Gato preto, pelo curto e brilhante, olhos amarelos. Amigo dele. Simpático,
 falante, sempre negociando alguma coisa com alguém. É o extrovertido da dupla.
 
 O CELULAR
-Todas as 8 imagens são fotos que ELE tirou com o celular e postou no story. Ou é
+Todas as 16 imagens são fotos que ELE tirou com o celular e postou no story. Ou é
 selfie (pata esticada, ângulo de baixo, meio torto, lente meio distorcida na
 borda), ou é foto que ele tirou de OUTROS gatos — e essa é a parte que ele mais
 gosta de compartilhar: dois gatos dividindo comida, o Black tentando negociar
@@ -146,21 +157,28 @@ VOZ = f"""\
 A VOZ DAS LEGENDAS
 Primeira pessoa, português do Brasil, gíria de quebrada paulista de forma
 natural (nunca caricata, nunca "mano do céu" forçado). Tudo em minúsculas, como
-quem digita rápido no celular. No máximo {MAX_LEGENDA} caracteres.
+quem digita rápido no celular.
+
+O TAMANHO É REGRA DURA: de {MIN_PALAVRAS} a {MAX_PALAVRAS} palavras, no máximo
+{MAX_LEGENDA} caracteres. Não é preferência de estilo — a foto fica 2 segundos
+na tela e a legenda é grande. Sete palavras não são lidas antes do corte, e o
+que não é lido não existe. Corte artigo, corte explicação, corte a segunda
+ideia. Uma legenda = um pensamento.
 
 O tom é INTIMISTA. Não é comédia escancarada e não é frase de efeito
 motivacional. É o pensamento solto de quem tá vivendo aquilo: meio sonolento,
 meio observador, às vezes carinhoso, às vezes com uma melancolia leve que ele
 não comenta. Ele repara nas coisas.
 
-Pode usar emoji, no máximo um, e só quando faz falta.
+Pode usar emoji, no máximo um, e só quando faz falta. O emoji conta como palavra.
 
-BOM:            RUIM:
-"acordei agora, ja ta escurecendo"    "Bom dia! Que dia lindo hoje!"
+BOM ({MIN_PALAVRAS} a {MAX_PALAVRAS} palavras):   RUIM (comprido ou genérico):
+"ja ta escurecendo"                   "acordei agora e ja ta escurecendo de novo"
 "o black nunca perde uma"             "Meu amigo Black é muito engraçado kkkk"
 "esses dois to shippando"             "Olha só que casal fofo de gatinhos!"
-"ninguem me avisou que ja era manha"  "A noite passou voando, que loucura!"
-"vou dormir na aula de novo"          "Hora de ir para a escola estudar!"
+"ninguem avisou que amanheceu"        "A noite passou voando, que loucura!"
+"vou dormir na aula"                  "Hora de ir para a escola estudar!"
+"o portao ainda ta morno"             "O portão de casa ainda está morninho de sol"
 """
 
 ESTETICA = """\
@@ -178,15 +196,38 @@ Nunca miséria, nunca entulho, nunca tijolo cru, nunca lixo, nunca favela
 estereotipada de filme. A sensação de toda foto tem que ser paz, fartura e
 pertencimento.
 
-A luz é o personagem principal. Beats 1 a 3: fim de tarde, sol baixo e dourado
-atravessando as folhas. Beats 4 a 6: noite quente, luz de poste âmbar, brilho da
-padaria, luzinha de varal, o céu ainda com um resto de azul. Beats 7 e 8: nascer
-do sol, azul frio virando rosa e dourado, orvalho, ar limpo.
+A luz é o personagem principal, e ela ANDA ao longo dos 16 beats — é o relógio
+do vídeo. Cada faixa tem que ser inconfundível da anterior:
+
+- beats 1 a 4: fim de tarde, sol baixo e dourado atravessando as folhas, sombras
+  compridas, tudo cor de mel;
+- beats 5 a 7: o anoitecer acontecendo, céu azul-violeta com um resto de laranja
+  no horizonte, as primeiras luzes de poste e de janela acendendo;
+- beats 8 a 11: noite quente e cheia, luz de poste âmbar, brilho da padaria,
+  luzinha de varal, refletor de quadra, o céu já preto-azulado;
+- beats 12 e 13: madrugada alta, luz fria e escassa, rua vazia, orvalho
+  começando, o primeiro clarão cinza-azulado no fundo do céu;
+- beats 14 a 16: nascer do sol, azul frio virando rosa e dourado, ar limpo,
+  vapor subindo do asfalto, luz nova e horizontal.
 
 Escreva "cena" em inglês, como quem descreve uma foto de celular: quem está no
 quadro, fazendo o quê, onde, e como está a luz. Nunca peça texto, letras, placas
 legíveis ou marcas na imagem.
 """
+
+
+def _numerar(indices: tuple[int, ...]) -> str:
+    """Índices de BEATS na numeração humana do prompt: (7, 8, 9, 10) -> '8, 9, 10 e 11'.
+
+    O prompt fala em "beat 8" e o código em `BEATS[7]`. Deixar essa conversão em
+    um lugar só é o que evita o erro clássico deste arquivo: mexer na lista de
+    beats e esquecer de mexer no texto que aponta para eles.
+    """
+    numeros = [str(i + 1) for i in indices]
+    return f"{', '.join(numeros[:-1])} e {numeros[-1]}" if len(numeros) > 1 else numeros[0]
+
+
+BEATS_ANCORA = tuple(i for i in range(len(BEATS)) if i not in BEATS_ROLE)
 
 
 def _contexto_recentes(recentes: list[dict]) -> str:
@@ -217,12 +258,12 @@ def _contexto_dia(var: Variacao) -> str:
     return f"""\
 O DIA DE HOJE (não é sugestão: é o que está dado. Escreva EM CIMA disto.)
 
-O tempo: {var.clima}. Vale para as 8 fotos — é um dia só.
+O tempo: {var.clima}. Vale para as 16 fotos — é um dia só.
 A época do ano no bairro: {var.calendario}.
 O humor dele hoje: {var.humor}.
-O tempero do dia, o fio que atravessa as 8 fotos: {var.tempero}.
+O tempero do dia, o fio que atravessa as 16 fotos: {var.tempero}.
 Quem do bairro aparece hoje: {visita}
-A forma do rolê (beats 4, 5 e 6): {var.forma}.
+A forma do rolê (beats {_numerar(BEATS_ROLE)}): {var.forma}.
 
 O recheio dos beats-âncora de hoje:
 {ancoras}
@@ -244,26 +285,34 @@ def _prompt(var: Variacao, recentes: list[dict]) -> str:
     selfies = len(BEATS) - var.quantas_outros
     return f"""\
 Escreva o dia de hoje ({agora.strftime('%d/%m/%Y')}, {agora.strftime('%A')}) do
-canal. São 8 fotos, exatamente uma por beat, na ordem abaixo.
+canal. São {len(BEATS)} fotos, exatamente uma por beat, na ordem abaixo.
 
 {PERSONAGEM}
 
 {VOZ}
 
-OS 8 BEATS (obrigatórios, nesta ordem — use o nome do beat no campo "beat")
+OS {len(BEATS)} BEATS (obrigatórios, nesta ordem — use o nome do beat no campo "beat")
 {roteiro_beats}
 
-Os beats 1, 2, 3, 7 e 8 são âncoras: a FUNÇÃO deles não muda, mas o detalhe sim,
-e o detalhe de hoje já está definido abaixo.
+Os beats {_numerar(BEATS_ANCORA)} são âncoras: a FUNÇÃO deles não muda, mas o
+detalhe sim, e o detalhe de hoje já está definido abaixo.
 
-Os beats 4, 5 e 6 são o rolê de hoje. Escolha UM lugar e conte lá a história de
-hoje, com começo, meio e fim ao longo dos três beats. Nível de especificidade
-esperado (exemplos só para calibrar, não copie): {', '.join(semente)}.
+Os beats {_numerar(BEATS_ROLE)} são o rolê de hoje. Escolha UM lugar e conte lá a
+história de hoje, com começo, meio e fim ao longo dos quatro beats. Nível de
+especificidade esperado (exemplos só para calibrar, não copie): {', '.join(semente)}.
+
+O VÍDEO DÁ VOLTA. Ele reinicia sozinho, então o beat {len(BEATS)} não é o fim de
+nada: a foto seguinte a ele é a do beat 1, ele acordando outra vez. Escreva a
+última legenda como quem continua, não como quem se despede — nada de "até
+amanhã", "boa noite", "foi isso", nem resumo do dia. O ciclo fecha porque
+recomeça, e o espectador não pode receber aviso nenhum de que acabou.
 
 {_contexto_dia(var)}
 
-Exatamente {var.quantas_outros} das 8 fotos devem ser "outros" (foto que ele
-tirou de outros), e {selfies} devem ser "selfie". O beat 1 é sempre selfie.
+Exatamente {var.quantas_outros} das {len(BEATS)} fotos devem ser "outros" (foto
+que ele tirou de outros), e {selfies} devem ser "selfie". O beat 1 é sempre
+selfie. Não coloque duas fotos "outros" seguidas mais do que o necessário — com
+o corte a cada 2s, alternar entre ele e o que ele vê é o que dá respiração.
 
 {_contexto_recentes(recentes)}
 
@@ -271,7 +320,7 @@ tirou de outros), e {selfies} devem ser "selfie". O beat 1 é sempre selfie.
 
 
 def gerar_roteiro(cfg: Config, var: Variacao, recentes: list[dict]) -> dict:
-    """Devolve o roteiro do dia já validado (8 cenas, legendas no tamanho)."""
+    """Devolve o roteiro do dia já validado (16 cenas, legendas no tamanho)."""
     print("[roteiro] Escrevendo o dia de hoje...")
     print(var.resumo())
     cliente = OpenAI(api_key=cfg.openai_api_key)
@@ -301,12 +350,18 @@ def gerar_roteiro(cfg: Config, var: Variacao, recentes: list[dict]) -> dict:
         )
 
     # Legenda estourada é falha de layout, não de conteúdo: cortar aqui é melhor
-    # do que deixar a caixa de story cobrir metade da foto.
+    # do que deixar a caixa de story cobrir metade da foto. O corte é sempre em
+    # palavra inteira, nos dois limites — legenda terminada no meio de uma
+    # palavra é pior do que legenda comprida.
     for cena in cenas:
         legenda = (cena.get("legenda") or "").strip()
-        if len(legenda) > MAX_LEGENDA:
-            cena["legenda"] = legenda[:MAX_LEGENDA].rsplit(" ", 1)[0].rstrip(",.;")
-            print(f"[roteiro] Legenda cortada: {legenda!r} -> {cena['legenda']!r}")
+        curta = " ".join(legenda.split()[:MAX_PALAVRAS])
+        if len(curta) > MAX_LEGENDA:
+            curta = curta[:MAX_LEGENDA].rsplit(" ", 1)[0]
+        curta = curta.rstrip(",.;:- ")
+        if curta != legenda:
+            cena["legenda"] = curta
+            print(f"[roteiro] Legenda cortada: {legenda!r} -> {curta!r}")
 
     print(f"[roteiro] '{roteiro.get('titulo', '')}' — {len(cenas)} cenas.")
     return roteiro

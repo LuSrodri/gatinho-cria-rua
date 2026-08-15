@@ -2,16 +2,27 @@
 
 O vídeo é montado como um story do Instagram assistido de fora:
 
-- as 8 fotos em corte seco, 4s cada, com um movimento lento de câmera sorteado
-  foto a foto (foto parada por 4s lê como travada; o movimento devolve vida sem
-  inventar ação que não existe);
+- as 16 fotos em corte seco, 2s cada (a primeira 1s), com um movimento lento de
+  câmera sorteado foto a foto (foto parada lê como travada; o movimento devolve
+  vida sem inventar ação que não existe);
 - a barra segmentada de stories no topo, uma divisão por foto, preenchendo em
   tempo real;
 - o @ do canal logo abaixo dela;
 - um degradê escuro no topo, para a barra e o @ não sumirem numa foto de céu
   claro;
 - as legendas de story queimadas (legendas.py);
-- a trilha da ElevenLabs, com fade nas pontas.
+- a trilha da ElevenLabs, costurada para dar a volta no loop.
+
+Duas fronteiras diferentes, tratadas ao contrário uma da outra:
+
+- a fronteira ENTRE FOTOS é para ser vista. Corte seco, sem dissolve, sem fade
+  na legenda, movimento de câmera recomeçando do zero e uma divisão nova da
+  barra acendendo. A cada 2s o espectador percebe que virou a página, e é isso
+  que segura os 31s;
+- a fronteira do VÍDEO — o fim voltando para o começo — é para não ser vista. Aí
+  não há fade de saída no áudio, nem escurecimento, nem nada que anuncie o fim:
+  a trilha entra em CAUDA_LOOP segundos de cruzamento que fazem o instante
+  seguinte ao último quadro ser exatamente o primeiro.
 
 Tudo em um `filter_complex` só: dois passes de codificação custariam qualidade
 sem ganhar nada, já que a fonte são PNGs.
@@ -28,7 +39,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from .config import DUR_IMAGEM, DUR_TOTAL, RAIZ, Config
+from .config import CAUDA_LOOP, DURACOES, DUR_TOTAL, INICIOS, RAIZ, Config
 from .variacao import Movimento, Variacao
 
 # Barra de stories, em pixels para um vídeo de 1080 de largura (escalada
@@ -38,8 +49,9 @@ BARRA_TOPO = 26
 BARRA_ALTURA = 6
 BARRA_VAO = 6
 # Degraus do preenchimento de cada divisão (ver _barra_stories). Dimensionado
-# para o degrau durar ~0,1s: com a foto em 4s, 25 degraus já se veem pular.
-PASSOS = 40
+# para o degrau durar ~0,1s, que é o limiar em que o preenchimento deixa de se
+# ver pular: com a foto em 2s, são 20 degraus.
+PASSOS = 20
 
 # Véu escuro do topo, para a barra e o @ não sumirem numa foto de céu claro.
 DEGRADE_ALTURA = 0.115  # fração da altura do vídeo
@@ -112,11 +124,20 @@ def _cadeia_foto(indice: int, cfg: Config, frames: int, mov: Movimento) -> str:
 def _barra_stories(cfg: Config, total: int) -> list[str]:
     """Fundo e preenchimento da barra segmentada, uma divisão por foto.
 
+    Com 16 divisões a barra também virou marcador de corte: cada foto acende uma
+    divisão nova, então a fronteira entre duas fotos aparece no topo da tela
+    mesmo quando as duas imagens têm enquadramento parecido.
+
+    As divisões são todas do MESMO tamanho, embora a primeira foto dure metade
+    das outras. É de propósito: a barra é a régua do formato, não do tempo, e uma
+    divisão pela metade seria lida como defeito. O que muda na primeira é só a
+    velocidade do preenchimento dela.
+
     O preenchimento é feito em degraus, e não com uma largura que cresce em
     função de `t`: o `drawbox` resolve `w` uma única vez, na inicialização do
     filtro, e só o `enable` é reavaliado a cada quadro. Então cada degrau é uma
-    caixa de largura fixa que acende na sua fatia de tempo. Com PASSOS=25 o
-    degrau tem ~5px numa divisão de ~124px, o que a 30fps não se distingue de um
+    caixa de largura fixa que acende na sua fatia de tempo. Com PASSOS=20 o
+    degrau tem ~3px numa divisão de ~59px, o que a 30fps não se distingue de um
     preenchimento contínuo.
     """
     escala = cfg.video_largura / 1080
@@ -125,12 +146,12 @@ def _barra_stories(cfg: Config, total: int) -> list[str]:
     topo = BARRA_TOPO * escala
     altura = BARRA_ALTURA * escala
     largura_seg = (cfg.video_largura - 2 * margem - (total - 1) * vao) / total
-    passo = DUR_IMAGEM / PASSOS
 
     filtros = []
     for i in range(total):
         x = margem + i * (largura_seg + vao)
-        inicio = i * DUR_IMAGEM
+        inicio = INICIOS[i]
+        passo = DURACOES[i] / PASSOS
         base = f"drawbox=x={x:.2f}:y={topo:.2f}:h={altura:.2f}"
 
         # Trilho apagado da divisão, sempre visível.
@@ -150,7 +171,7 @@ def _barra_stories(cfg: Config, total: int) -> list[str]:
         # como as stories já vistas no Instagram.
         filtros.append(
             f"{base}:w={largura_seg:.2f}:color=white@0.95:t=fill"
-            f":enable='gte(t\\,{inicio + DUR_IMAGEM:.3f})'"
+            f":enable='gte(t\\,{inicio + DURACOES[i]:.3f})'"
         )
     return filtros
 
@@ -180,8 +201,13 @@ def montar_video(
     if shutil.which("ffmpeg") is None:
         raise SystemExit("ffmpeg não encontrado no PATH — sem ele não há vídeo.")
 
-    frames = round(DUR_IMAGEM * cfg.fps)
     total = len(imagens)
+    if total != len(DURACOES):
+        raise SystemExit(
+            f"Chegaram {total} fotos e o formato prevê {len(DURACOES)}. A barra de "
+            "stories e as legendas são calculadas a partir do formato — montar "
+            "assim sairia dessincronizado."
+        )
     veu = _gradiente(cfg, cfg.saida / "gradiente.png")
 
     comando = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"]
@@ -197,7 +223,8 @@ def montar_video(
         comando += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"]
 
     cadeias = [
-        _cadeia_foto(i, cfg, frames, var.movimentos[i]) for i in range(total)
+        _cadeia_foto(i, cfg, round(DURACOES[i] * cfg.fps), var.movimentos[i])
+        for i in range(total)
     ]
     concat = "".join(f"[v{i}]" for i in range(total)) + f"concat=n={total}:v=1:a=0[seq]"
 
@@ -213,14 +240,32 @@ def montar_video(
     )
     video = "[comveu]" + ",".join(sobreposicoes) + "[vout]"
 
-    saida_audio = 1.5
-    # `apad` antes do corte: se a ElevenLabs devolver uma faixa mais curta que o
-    # pedido, o vídeo terminaria sem áudio nos últimos segundos em vez de com o
-    # fade — silêncio no fim lê como bug de codificação.
+    # A trilha é costurada em anel, não aparada com fade nas pontas.
+    #
+    # A faixa vem com DUR_TOTAL + CAUDA_LOOP de duração. O trecho que sobra no
+    # fim (a "volta") é cruzado por cima dos primeiros CAUDA_LOOP segundos do
+    # corpo: durante esse cruzamento o espectador ouve o que a música TERIA
+    # tocado depois do fim do vídeo desaparecendo enquanto o começo aparece. O
+    # efeito é que a amostra imediatamente posterior ao último quadro é a
+    # primeira, sem degrau — a música dá a volta em vez de terminar.
+    #
+    # É por isso que não existe mais `afade=t=out` aqui: um fade de saída é a
+    # indicação mais clara que um vídeo pode dar de que está acabando, e o Short
+    # reinicia sozinho. O que se quer é o contrário — que o fim não se anuncie.
+    #
+    # `apad` antes de tudo: se a ElevenLabs devolver uma faixa mais curta que o
+    # pedido, a volta vira silêncio e o cruzamento degenera num fade de entrada
+    # de CAUDA_LOOP segundos. Perde-se o anel, mas não se perde o áudio.
+    volta_de = DUR_TOTAL
+    volta_ate = DUR_TOTAL + CAUDA_LOOP
     audio = (
-        f"[{total + 1}:a]apad,atrim=0:{DUR_TOTAL},asetpts=PTS-STARTPTS,"
-        f"afade=t=in:st=0:d=0.6,"
-        f"afade=t=out:st={DUR_TOTAL - saida_audio}:d={saida_audio},"
+        f"[{total + 1}:a]apad=whole_dur={volta_ate},asplit=2[acorpo][avolta];"
+        f"[acorpo]atrim=0:{DUR_TOTAL},asetpts=PTS-STARTPTS[corpo];"
+        f"[avolta]atrim={volta_de}:{volta_ate},asetpts=PTS-STARTPTS[volta];"
+        # A volta entra como PRIMEIRA entrada do acrossfade: quem sai é ela, quem
+        # entra é o corpo. Trocar a ordem cruzaria o fim do vídeo com o silêncio
+        # depois dele, que é exatamente o fade que se quer evitar.
+        f"[volta][corpo]acrossfade=d={CAUDA_LOOP}:c1=tri:c2=tri,"
         f"aformat=sample_rates=44100:channel_layouts=stereo[aout]"
     )
 

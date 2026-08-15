@@ -32,37 +32,72 @@ def atualizar_env(chave: str, valor: str) -> None:
 
 # ---- Formato do Short --------------------------------------------------------
 
-# 8 imagens × 4s = 32s. Os três números andam juntos: mexer em um sem mexer nos
-# outros desalinha a barra de stories, as legendas e a trilha, que são
-# calculadas a partir deles.
+# 16 fotos: a primeira em 1s e as outras quinze em 2s, dando 31s de vídeo.
 #
-# 4s por foto (e não 2,5s) porque a imagem passou a ser o produto: a 2,5s o olho
-# mal termina de varrer o quadro antes do corte, e todo detalhe que a foto tem —
-# a florada, o reflexo no asfalto, quem está no fundo — se perde. Em 4s a foto
-# respira, cabe legenda maior e o movimento de câmera tem tempo de acontecer.
-TOTAL_IMAGENS = 8
-DUR_IMAGEM = 4.0
-DUR_TOTAL = TOTAL_IMAGENS * DUR_IMAGEM
+# 2s por foto (e não 4s) porque o formato passou a ser o produto. A 4s a foto
+# respirava, mas o Short inteiro cabia em oito imagens — e oito imagens em 32s
+# lê como apresentação de slides. A 2s o corte vira o ritmo: dezesseis fotos
+# passam no tempo em que oito passavam, o dia dele ganha etapas intermediárias
+# (o portão, o encontro, a volta) e nenhum quadro fica na tela tempo suficiente
+# para o olho começar a esperar o próximo.
+#
+# A PRIMEIRA em 1s por causa do loop. O Short reinicia sozinho, então o corte
+# mais importante do vídeo é o do último quadro para o primeiro — e é o único
+# que o espectador vê duas vezes. Uma abertura curta atravessa depressa o
+# território já conhecido e devolve o vídeo ao movimento antes de dar tempo de
+# reconhecer que ele recomeçou.
+#
+# Estes números andam juntos com a barra de stories, as legendas e o tamanho da
+# trilha, todos calculados a partir de DURACOES/INICIOS.
+TOTAL_IMAGENS = 16
+DUR_IMAGEM = 2.0
+DUR_PRIMEIRA = 1.0
 
-# Os 8 momentos do dia dele, na ordem. A rotina é FIXA de propósito — é o que
+# Duração de cada foto e o instante em que ela entra. Tudo que precisa de tempo
+# no pipeline lê destas duas listas, e não de uma multiplicação por índice: as
+# fotos não têm mais todas o mesmo tamanho.
+DURACOES = [DUR_PRIMEIRA] + [DUR_IMAGEM] * (TOTAL_IMAGENS - 1)
+INICIOS = [sum(DURACOES[:i]) for i in range(TOTAL_IMAGENS)]
+DUR_TOTAL = sum(DURACOES)
+
+# Sobreposição da volta do loop, em segundos. A trilha é pedida com DUR_TOTAL +
+# CAUDA_LOOP de duração, e os últimos CAUDA_LOOP segundos são cruzados por cima
+# do começo dela (ver o filtro de áudio em video.py). O resultado é que o
+# instante seguinte ao último quadro já é o primeiro, sem emenda audível — e sem
+# o fade de saída, que era o aviso mais claro de que o vídeo ia acabar.
+CAUDA_LOOP = 2.0
+
+# Os 16 momentos do dia dele, na ordem. A rotina é FIXA de propósito — é o que
 # faz o canal ter formato reconhecível: o espectador sabe que começa no fim da
-# tarde e termina no busão. O que muda todo dia são os três beats do rolê
-# (índices 3, 4 e 5), onde o roteirista tem liberdade total, e o recheio dos
+# tarde e termina no busão. O que muda todo dia são os quatro beats do rolê
+# (índices 7 a 10), onde o roteirista tem liberdade total, e o recheio dos
 # âncoras, que é sorteado em variacao.py.
+#
+# O último beat e o primeiro são vizinhos, não pontas: ele pega o busão para a
+# escola e a foto seguinte é a de acordar. É o mesmo ciclo recomeçando, e é o
+# que faz o loop fechar sem que nada precise anunciar o fim.
 BEATS = [
     ("acordar", "Ele acorda no fim da tarde, sol baixo entrando pela janela do quarto."),
+    ("espreguicar", "Ainda mole, no lugar onde acordou, olhando a rua no fim da tarde."),
     ("cafe", "O café dele, na laje ou na janela, com o pôr do sol na cidade ao fundo."),
+    ("portao", "Ele saindo de casa, o portão e a calçada banhados de sol baixo."),
     ("chamar_black", "Ele vai chamar o Black, o amigo gato preto simpático, na rua."),
-    ("role_1", "Primeiro momento do rolê da noite."),
-    ("role_2", "Segundo momento do rolê — o auge da noite."),
-    ("role_3", "Terceiro momento do rolê, já na madrugada, o clima baixando."),
+    ("encontro", "O Black aparece: os dois juntos, o céu já virando anoitecer."),
+    ("rua", "Os dois pela rua enquanto as primeiras luzes do bairro acendem."),
+    ("role_1", "Primeiro momento do rolê da noite: eles chegam no lugar."),
+    ("role_2", "Segundo momento do rolê — a coisa acontecendo."),
+    ("role_3", "Terceiro momento do rolê: o auge da noite."),
+    ("role_4", "Quarto momento do rolê, o desfecho do que aconteceu."),
+    ("madrugada", "Madrugada alta, o clima baixando, a rua vazia e quieta."),
+    ("volta", "Os dois voltando a pé, o céu começando a clarear no fundo."),
     ("nascer_do_sol", "O nascer do sol pegando os dois, fim da noite."),
+    ("ponto", "O ponto de ônibus, ele esperando com a luz nova da manhã."),
     ("busao", "Ele pegando o busão para a escola, sem ter dormido."),
 ]
 
-# Índices dos beats em que o Black aparece por definição do roteiro. Serve para
-# saber quando vale gastar a imagem de referência dele (ver imagens.py).
-BEATS_COM_BLACK = {2, 6}
+# Índices dos quatro beats do rolê — o único trecho em que o roteirista inventa
+# o lugar e o acontecimento. Roteiro e prompt de imagem leem daqui.
+BEATS_ROLE = (7, 8, 9, 10)
 
 
 @dataclass

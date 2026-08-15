@@ -1,8 +1,9 @@
-"""As 8 fotos do story, geradas pelo gpt-image-2.
+"""As 16 fotos do story, geradas pelo gpt-image-2.
 
-O problema difícil aqui não é fazer imagem bonita: é fazer o MESMO gato oito
+O problema difícil aqui não é fazer imagem bonita: é fazer o MESMO gato dezesseis
 vezes. Um canal de personagem morre no instante em que o espectador percebe que
-o gato de cada foto é um gato diferente.
+o gato de cada foto é um gato diferente — e dobrar o número de fotos dobra as
+chances de ele perceber.
 
 A solução é ``images.edit`` com imagem de referência (o gpt-image-2 aceita uma
 lista delas e processa todas em alta fidelidade). Duas classes de referência
@@ -100,7 +101,7 @@ raised the phone quickly to capture the moment."""
 
 
 def _clima(var: Variacao) -> str:
-    """A condição do dia, igual nas 8 fotos.
+    """A condição do dia, igual nas 16 fotos.
 
     Está aqui, e não só no roteiro, porque o modelo de imagem ignora o que não
     lhe é dito: sem esta linha, metade das fotos sairia com um tempo e a outra
@@ -137,8 +138,9 @@ def _gerar(
 ) -> Path:
     """Gera uma foto e salva em ``destino``. Aborta a execução se não sair.
 
-    Não há fallback: 8 imagens é a estrutura do vídeo, e repetir uma foto para
-    tapar buraco é exatamente o tipo de defeito que o espectador nota.
+    Não há fallback: 16 imagens é a estrutura do vídeo, e repetir uma foto para
+    tapar buraco é exatamente o tipo de defeito que o espectador nota — mais
+    ainda com o corte a cada 2s, em que a foto repetida volta rápido.
     """
     cliente = OpenAI(api_key=cfg.openai_api_key)
     prompt = _prompt(cena, var)
@@ -177,7 +179,7 @@ def _gerar(
 
 
 def gerar_imagens(cfg: Config, roteiro: dict, var: Variacao) -> list[Path]:
-    """Gera as 8 fotos na ordem dos beats e devolve os caminhos."""
+    """Gera as 16 fotos na ordem dos beats e devolve os caminhos."""
     cenas = roteiro["cenas"]
     pasta = cfg.saida / "imagens"
     pasta.mkdir(parents=True, exist_ok=True)
@@ -225,10 +227,13 @@ def gerar_imagens(cfg: Config, roteiro: dict, var: Variacao) -> list[Path]:
                 refs.append(caminhos[ancora])
         return refs
 
-    # Onda 2: o resto em paralelo. O teto de 4 é para não estourar o limite de
-    # requisições por minuto da conta enquanto ainda encurta bastante a execução.
+    # Onda 2: o resto em paralelo. O teto subiu de 4 para 6 quando as fotos
+    # passaram de 8 para 16: com 4 seriam quatro levas em vez de duas, e o cron
+    # roda quatro vezes por dia com horário marcado. Seis chamadas simultâneas de
+    # `high` levam ~1 min cada, o que dá ~6 requisições por minuto — bem abaixo
+    # do limite da conta, que é o motivo de o teto existir.
     pendentes = [i for i in range(len(cenas)) if caminhos[i] is None]
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=6) as executor:
         futuros = {
             executor.submit(_gerar, cfg, cenas[i], var, nome(i), referencias(i)): i
             for i in pendentes
