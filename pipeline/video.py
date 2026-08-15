@@ -214,13 +214,19 @@ def montar_video(
     for imagem in imagens:
         comando += ["-i", str(imagem.relative_to(RAIZ).as_posix())]
     comando += ["-i", str(veu.relative_to(RAIZ).as_posix())]
-    if musica is not None:
-        comando += ["-i", str(musica.relative_to(RAIZ).as_posix())]
-    else:
-        # Faixa muda em vez de nenhuma faixa: o YouTube trata vídeo sem stream
-        # de áudio de forma imprevisível, e um Short mudo já é ruim o bastante
-        # sem virar também um upload recusado.
-        comando += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"]
+    # A trilha entra DUAS vezes, como duas entradas independentes do ffmpeg: uma
+    # vira o corpo do vídeo, a outra vira a volta do loop. O caminho óbvio seria
+    # uma entrada só com `asplit`, e é justamente o que não funciona — ver o
+    # filtro de áudio adiante.
+    #
+    # Faixa muda em vez de nenhuma faixa: o YouTube trata vídeo sem stream de
+    # áudio de forma imprevisível, e um Short mudo já é ruim o bastante sem
+    # virar também um upload recusado.
+    for _ in range(2):
+        if musica is not None:
+            comando += ["-i", str(musica.relative_to(RAIZ).as_posix())]
+        else:
+            comando += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"]
 
     cadeias = [
         _cadeia_foto(i, cfg, round(DURACOES[i] * cfg.fps), var.movimentos[i])
@@ -256,16 +262,41 @@ def montar_video(
     # `apad` antes de tudo: se a ElevenLabs devolver uma faixa mais curta que o
     # pedido, a volta vira silêncio e o cruzamento degenera num fade de entrada
     # de CAUDA_LOOP segundos. Perde-se o anel, mas não se perde o áudio.
+    #
+    # A FORMA deste filtro é resultado de uma falha, e vale contar para ninguém
+    # "simplificar" de volta. O caminho natural é uma entrada só, `asplit` em
+    # dois ramos e um `acrossfade` juntando: escreve o anel numa linha. Isso
+    # monta perfeitamente no ffmpeg 8.1.1 e FALHA no 7.1 do contêiner, com
+    # "Could not open encoder before EOF" — a cadeia de áudio não entrega um
+    # único quadro e o encoder AAC morre sem nunca saber o formato. O motivo é
+    # que o `acrossfade` só emite depois de ler a PRIMEIRA entrada inteira, e a
+    # primeira entrada (a volta) é o fim do arquivo: para chegar lá, o `asplit`
+    # precisa empurrar 31s pelo outro ramo, que ninguém está consumindo. O 8.1.1
+    # tolera esse acúmulo; o 7.1 desiste. Verificado nas duas versões, variante
+    # por variante — só a dupla asplit+acrossfade quebra.
+    #
+    # Daí as duas entradas independentes e o `amix`: cada ramo lê sua própria
+    # cópia do arquivo, e o amix consome os dois em paralelo, sem exigir que um
+    # deles termine primeiro.
+    #
+    # O cruzamento em si é idêntico ao do acrossfade: `curve=tri` é ganho
+    # linear, então o fade de entrada do corpo (t/d) e o de saída da volta
+    # (1 - t/d) somam exatamente 1 em todo instante da sobreposição. Com
+    # `normalize=0` o amix soma sem reescalar, e o resultado é o mesmo áudio —
+    # com a diferença de que ele existe.
     volta_de = DUR_TOTAL
     volta_ate = DUR_TOTAL + CAUDA_LOOP
     audio = (
-        f"[{total + 1}:a]apad=whole_dur={volta_ate},asplit=2[acorpo][avolta];"
-        f"[acorpo]atrim=0:{DUR_TOTAL},asetpts=PTS-STARTPTS[corpo];"
-        f"[avolta]atrim={volta_de}:{volta_ate},asetpts=PTS-STARTPTS[volta];"
-        # A volta entra como PRIMEIRA entrada do acrossfade: quem sai é ela, quem
-        # entra é o corpo. Trocar a ordem cruzaria o fim do vídeo com o silêncio
-        # depois dele, que é exatamente o fade que se quer evitar.
-        f"[volta][corpo]acrossfade=d={CAUDA_LOOP}:c1=tri:c2=tri,"
+        f"[{total + 1}:a]apad=whole_dur={volta_ate},atrim=0:{DUR_TOTAL},"
+        f"asetpts=PTS-STARTPTS,"
+        f"afade=t=in:st=0:d={CAUDA_LOOP}:curve=tri[corpo];"
+        # A volta é aparada do fim, deslocada para o zero e apagada por cima do
+        # começo; o `apad` final a estica com silêncio até o fim do vídeo, para
+        # o amix ter os dois ramos do mesmo tamanho e não inventar transição.
+        f"[{total + 2}:a]apad=whole_dur={volta_ate},atrim={volta_de}:{volta_ate},"
+        f"asetpts=PTS-STARTPTS,"
+        f"afade=t=out:st=0:d={CAUDA_LOOP}:curve=tri,apad=whole_dur={DUR_TOTAL}[volta];"
+        f"[corpo][volta]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,"
         f"aformat=sample_rates=44100:channel_layouts=stereo[aout]"
     )
 

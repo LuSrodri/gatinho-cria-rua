@@ -134,6 +134,28 @@ São 20 degraus × 16 fotos, e o filtergraph passa de 30 mil caracteres — mais
 que cabe numa linha de comando do Windows. Por isso ele vai num arquivo, com
 `-filter_complex_script`.
 
+### A trilha entra duas vezes, e não é desperdício
+
+O anel da trilha pede o mesmo áudio em dois pontos: o corpo do vídeo e a volta
+do loop. O caminho natural é uma entrada só, `asplit` em dois ramos e um
+`acrossfade` juntando — uma linha. **Isso monta no ffmpeg 8.1.1 e falha no 7.1**,
+que é o que o `python:3.12-slim` instala, com `Could not open encoder before EOF`:
+a cadeia de áudio não entrega um único quadro e o encoder AAC morre sem nunca
+saber o formato.
+
+O motivo é que o `acrossfade` só emite depois de ler a primeira entrada inteira,
+e a primeira entrada é o *fim* do arquivo — para chegar lá, o `asplit` precisa
+empurrar 31s pelo outro ramo, que ninguém está consumindo. O 8.1.1 tolera o
+acúmulo; o 7.1 desiste.
+
+Por isso a trilha entra como duas entradas independentes e o cruzamento é feito
+com `amix`, que consome os dois ramos em paralelo. O resultado é o mesmo áudio:
+`curve=tri` é ganho linear, então o fade de entrada do corpo (`t/d`) e o de
+saída da volta (`1 - t/d`) somam 1 em todo instante, e `normalize=0` faz o amix
+somar sem reescalar.
+
+Se for mexer nisto, teste no ffmpeg da imagem, não no da sua máquina.
+
 ## Rodando
 
 ```bash
