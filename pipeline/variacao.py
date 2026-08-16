@@ -11,8 +11,9 @@ hoje o tempo é este, hoje quem aparece é fulano, hoje o humor dele é este. O
 modelo não escolhe o tempero — ele escreve em cima do tempero.
 
 O que é sorteado (o recheio):
-  clima, calendário do bairro, humor, forma do rolê, tempero, elenco de apoio,
-  variantes dos beats-âncora e o movimento de câmera de cada foto.
+  o gancho da primeira foto, clima, calendário do bairro, humor, forma do rolê,
+  tempero, elenco de apoio, variantes dos beats-âncora, a escala de plano de cada
+  foto e o movimento de câmera de cada foto.
 
 O que NUNCA é sorteado (o esqueleto):
   os 16 beats, a estética, a voz das legendas, o gato, o Black e a trilha.
@@ -26,6 +27,8 @@ A semente é a data + a hora do run, então:
 import random
 from dataclasses import dataclass, field
 from datetime import datetime
+
+from .config import TOTAL_IMAGENS
 
 # ---- Elenco recorrente -------------------------------------------------------
 
@@ -195,19 +198,70 @@ TEMPEROS = [
     "tem prova na escola de manhã e ele não estudou",
 ]
 
+# ---- O gancho -----------------------------------------------------------------
+
+# A primeira foto do Short é a única que tem uma função além de contar o dia: ela
+# tem um segundo para impedir a pessoa de rolar o feed. E o que faz dono de gato
+# parar não é uma foto bonita de gato — é uma foto em que ele reconhece o PRÓPRIO
+# gato fazendo uma coisa que só gato faz. O comentário que se quer embaixo do
+# vídeo é "meu gato faria isso kkkk", e ninguém escreve isso por causa de um
+# nascer do sol.
+#
+# Por isso o gancho é sorteado aqui e não fica por conta do modelo. Pedir "faça
+# um gancho criativo" a um LLM devolve a média dele, que é gato fofo dormindo ao
+# sol — bonito e esquecível. Sorteado, o absurdo vem inteiro e específico, e o
+# modelo gasta a criatividade em escrever a legenda em cima dele.
+#
+# A régua de cada entrada, e o que faz uma entrar nesta lista:
+#
+# 1. TEM QUE SER LIDA EM UM SEGUNDO. A foto abre o vídeo e dura 1s. Absurdo que
+#    precisa de contexto ("ele está com ciúmes do vizinho") não cabe; absurdo de
+#    POSIÇÃO e de LUGAR cabe, porque é uma silhueta.
+# 2. TEM QUE SER COISA DE GATO DE VERDADE. Nada de gato fazendo coisa de gente —
+#    a graça do canal é o contrário: um gato comum, com anatomia de gato, fazendo
+#    exatamente o que gatos fazem, num dia que por acaso é de adolescente.
+# 3. NÃO PODE SER FOFO E PRONTO. Fofo o canal já é o tempo inteiro. Aqui precisa
+#    ter o desconforto cômico: o lugar errado, a posição impossível, a cara de
+#    quem foi pego.
+#
+# O gancho substitui o antigo âncora "onde ele acorda": onde ele acorda passou a
+# ser parte da piada, em vez de um detalhe ao lado dela.
+GANCHOS = [
+    "dormindo dentro de uma caixa de papelão pequena demais para ele, "
+    "transbordando dos quatro lados, com cara de que está tudo perfeito",
+    "de barriga para cima, de pernas abertas e cabeça pendurada para trás no "
+    "degrau, na posição menos digna que um gato consegue",
+    "espremido dentro de uma bacia de plástico redonda, moldado no formato dela",
+    "dormindo em cima de um par de chinelos, ignorando a almofada macia que está "
+    "ao lado, vazia",
+    "sentado exatamente dentro de um quadrado desenhado no chão pelo sol da "
+    "janela, do tamanho exato dele, sem encostar um fio de pelo para fora",
+    "acordando dentro de um vaso de samambaia, com as folhas para todo lado e "
+    "terra no bigode",
+    "dormindo enfiado num saco de papel de padaria, só o rabo para fora",
+    "com metade do corpo dentro de uma caixa e a outra metade escorrendo para "
+    "fora, dormindo assim mesmo",
+    "empoleirado num lugar impossivelmente estreito — o parapeito de dois dedos, "
+    "o encosto fino da cadeira — dormindo como se fosse um colchão",
+    "com a cara amassada contra o vidro da janela, dormindo grudado nele",
+    "dormindo em cima do jornal aberto, exatamente por cima da parte que alguém "
+    "estava lendo",
+    "acordado de susto no meio de um pulo, no ar, com os olhos enormes de quem "
+    "não sabe o que aconteceu",
+    "dentro da caixa vazia, ao lado da caminha nova e cara que ninguém usou",
+    "espalhado em cima do capô morno do carro, derretido, ocupando o capô inteiro",
+    "com a pata na cara, tapando os olhos do sol, se recusando a acordar",
+    "sentado como gente, encostado num degrau, com as pernas para a frente e "
+    "cara de quem está pensando na vida",
+    "olhando fixo para um canto vazio da parede, imóvel, sem nada ali",
+    "enfiado dentro de um pé de bota velha na varanda, só as orelhas aparecendo",
+    "dormindo dentro do cesto de roupa limpa, em cima da roupa dobrada, "
+    "obviamente pego no flagra",
+    "acordando com a marca do tapete estampada na cara inteira",
+]
+
 # Variantes dos beats-âncora. A FUNÇÃO do beat não muda nunca; o detalhe, sim.
 ANCORAS = {
-    "onde ele acorda": [
-        "no sofá velho da varanda",
-        "em cima do muro ainda morno de sol",
-        "dentro do cesto de roupa limpa",
-        "no banco da praça, debaixo da árvore",
-        "numa caixa de papelão na garagem aberta",
-        "no capô de um carro estacionado",
-        "na rede da laje",
-        "no parapeito da janela, atrás da cortina",
-        "no meio dos vasos de samambaia",
-    ],
     "o que tem no café dele": [
         "pão na chapa com muita manteiga",
         "um pedaço de bolo de fubá",
@@ -271,6 +325,212 @@ FAIXA_OUTROS = (6, 10)
 CHANCE_CONVIDADO = 0.7
 
 
+# ---- Enquadramento -----------------------------------------------------------
+
+# A ESCALA DE PLANO. Sem ela o vídeo é um slideshow, e nenhum ritmo de corte
+# conserta isso.
+#
+# O problema era que o enquadramento estava congelado dentro dos blocos "selfie"
+# e "outros" de imagens.py: TODA selfie era "low angle, close to his face" e TODA
+# foto de outros era "from a short distance". Dezesseis fotos, duas distâncias.
+# Aí o corte pode variar de 1,3s a 3,5s à vontade — o olho continua vendo a mesma
+# imagem em tamanhos iguais, e é isso que lê como apresentação de slides. Ritmo
+# visual é CONTRASTE DE ESCALA: o olho tem que reajustar a cada corte, e é o
+# reajuste que dá a sensação de montagem.
+#
+# `familia` é o que faz o trabalho. A regra do sorteio não é "não repetir o
+# enquadramento" (dois planos médios diferentes ainda são dois planos médios): é
+# não repetir a FAMÍLIA, então todo corte troca de escala. Fechado nunca vem
+# depois de fechado, aberto nunca depois de aberto.
+#
+# `so_outros` marca o que não cabe numa selfie de pata esticada: um plano em que
+# o gato é pequeno na rua não existe com o braço dele segurando o celular. Esses
+# beats viram foto que ele tirou do lugar, e o roteirista é avisado.
+#
+# `camera` multiplica o movimento de câmera. Não é enfeite: a mesma amplitude de
+# pan que respira num plano aberto vira tremor num macro do olho, porque no macro
+# cada pixel de deslocamento é muito mais campo de visão. Escala e movimento têm
+# que andar juntos ou um denuncia o outro.
+
+
+@dataclass(frozen=True)
+class Enquadramento:
+    chave: str
+    resumo: str  # PT, para o roteirista e para o log
+    visual: str  # EN, para o gpt-image-2
+    familia: str  # "fechado" | "medio" | "aberto"
+    peso: float  # com que frequência ele aparece, dentro da família dele
+    so_outros: bool = False
+    camera: float = 1.0
+
+
+ENQUADRAMENTOS = [
+    Enquadramento(
+        "olho",
+        "macro extremo: um detalhe só preenchendo a tela — o olho, o focinho, a "
+        "pata na parede morna, um pingo no bigode",
+        "FRAMING — an extreme macro close-up. A single detail fills the entire "
+        "frame edge to edge: the eye with the whole street reflected in it, the "
+        "wet nose, a paw pad on warm stone, dew on a whisker. Everything else is "
+        "far out of focus. The phone is a few centimetres away.",
+        "fechado",
+        peso=1.0,
+        camera=0.35,
+    ),
+    Enquadramento(
+        "close",
+        "close no rosto: a cara preenchendo o quadro, o fundo desmanchado",
+        "FRAMING — a tight close-up of the face. The head fills most of the "
+        "frame, cropped at the ears and the chest, the background dissolved into "
+        "soft bokeh. Shot from very near.",
+        "fechado",
+        peso=2.5,
+        camera=0.6,
+    ),
+    Enquadramento(
+        "medio",
+        "plano médio: do peito para cima, um pedaço do lugar aparecendo atrás",
+        "FRAMING — a medium shot, from the chest up, with a readable slice of the "
+        "place behind him. Arm's length from the phone.",
+        "medio",
+        peso=3.5,
+    ),
+    Enquadramento(
+        "corpo",
+        "o gato inteiro no quadro, com o lugar legível em volta dele",
+        "FRAMING — the whole cat in frame from nose to tail, with the place "
+        "clearly readable around him. Taken from a couple of metres away.",
+        "medio",
+        peso=3.0,
+    ),
+    Enquadramento(
+        "contra_plongee",
+        "contra-plongée: o celular quase no chão, apontado para cima — ele grande "
+        "contra o céu, com poste, laje e folhagem convergindo lá em cima",
+        "FRAMING — a strong low-angle shot (contre-plongée). The phone is almost "
+        "on the ground, tilted steeply upward. He looms large against the open "
+        "sky; power lines, the edge of a rooftop slab, tree branches and a lamp "
+        "post converge overhead. Heroic, slightly distorted by the wide lens.",
+        "medio",
+        peso=2.0,
+        camera=0.8,
+    ),
+    Enquadramento(
+        "de_cima",
+        "de cima: o celular erguido bem acima da cabeça, apontado para baixo",
+        "FRAMING — a high-angle shot from directly above, the phone held well "
+        "over his head and pointed down. You see the top of his head, his back "
+        "and the ground around him flattened out beneath.",
+        "medio",
+        peso=1.5,
+        camera=0.8,
+    ),
+    Enquadramento(
+        "aberto",
+        "plano aberto do LUGAR: a rua e o bairro ocupando a tela, e quem estiver "
+        "lá (o Black, outro gato, um vizinho) pequeno no meio",
+        "FRAMING — a wide shot of the place. The street and the neighbourhood "
+        "fill the frame: the pavement running away, the walls, the trees, the "
+        "houses, the sky above the wires. Whoever is in it — the black cat, "
+        "another cat, a neighbour — is small, in the middle distance. The place "
+        "is the subject.",
+        "aberto",
+        peso=0.9,
+        so_outros=True,
+        camera=1.25,
+    ),
+    Enquadramento(
+        "panorama",
+        "panorâmica do alto: o bairro inteiro e o céu, e quem aparecer é minúsculo",
+        "FRAMING — a very wide establishing shot taken from high up: from a "
+        "rooftop slab, the top of a wall or the steps of an alley. Rooftops, "
+        "treetops, the whole sky and the distant city skyline fill the frame. Any "
+        "cat in it is tiny, almost lost in a corner.",
+        "aberto",
+        peso=0.5,
+        so_outros=True,
+        camera=1.4,
+    ),
+]
+
+# Os três que o vídeo tem que ter, sempre. São as pontas da escala — sem o macro
+# e sem o aberto no mesmo vídeo, não existe contraste para o corte marcar.
+ENQUADRAMENTOS_OBRIGATORIOS = ("olho", "aberto", "contra_plongee")
+
+# Com o que o beat 1 pode abrir. O gancho tem um segundo para a piada ser
+# entendida, e piada de posição precisa do corpo inteiro e do lugar em volta:
+# um macro do olho não conta que ele está dentro de uma caixa pequena demais.
+ENQUADRAMENTOS_ABERTURA = ("corpo", "contra_plongee", "de_cima")
+
+
+def _sortear_enquadramentos(
+    rng: random.Random, total: int, teto_outros: int
+) -> list[Enquadramento]:
+    """Sorteia a escala de plano de cada foto, garantindo contraste em todo corte.
+
+    Três garantias, e cada uma existe porque sem ela o sorteio devolve slideshow:
+
+    1. a FAMÍLIA nunca se repete de uma foto para a seguinte. É a regra que faz o
+       trabalho — dois planos médios diferentes seguidos ainda são duas fotos do
+       mesmo tamanho;
+    2. os três enquadramentos das pontas (macro, aberto, contra-plongée) aparecem
+       pelo menos uma vez. Sorteio livre às vezes devolve dezesseis fotos entre
+       médio e close, que é justamente a média de onde estamos saindo;
+    3. os enquadramentos que não cabem numa selfie não passam do número de fotos
+       "de outros" do dia, senão o roteiro receberia uma exigência impossível.
+
+    A construção não tem tentativa e erro: os obrigatórios são colocados primeiro,
+    em posições espalhadas, e o resto é preenchido da esquerda para a direita
+    escolhendo entre os que não batem de família com os vizinhos já postos. Como
+    são três famílias e a menor tem dois membros, sempre sobra candidato.
+    """
+    por_familia: dict[str, list[Enquadramento]] = {}
+    for e in ENQUADRAMENTOS:
+        por_familia.setdefault(e.familia, []).append(e)
+
+    seq: list[Enquadramento | None] = [None] * total
+    seq[0] = rng.choice([e for e in ENQUADRAMENTOS if e.chave in ENQUADRAMENTOS_ABERTURA])
+    orcamento = teto_outros - (1 if seq[0].so_outros else 0)
+
+    def cabe(e: Enquadramento, i: int) -> bool:
+        if e.so_outros and orcamento <= 0:
+            return False
+        vizinhos = [seq[j] for j in (i - 1, i + 1) if 0 <= j < total and seq[j]]
+        return all(e.familia != v.familia for v in vizinhos)
+
+    # Os obrigatórios primeiro, um em cada terço do vídeo: espalhados, o contraste
+    # aparece três vezes ao longo dos 31s em vez de tudo no mesmo trecho.
+    obrigatorios = [e for e in ENQUADRAMENTOS if e.chave in ENQUADRAMENTOS_OBRIGATORIOS]
+    rng.shuffle(obrigatorios)
+    faixa = (total - 1) / len(obrigatorios)
+    for n, e in enumerate(obrigatorios):
+        posicoes = [
+            i
+            for i in range(1 + round(n * faixa), 1 + round((n + 1) * faixa))
+            if i < total and seq[i] is None and cabe(e, i)
+        ]
+        if posicoes:
+            i = rng.choice(posicoes)
+            seq[i] = e
+            orcamento -= e.so_outros
+
+    for i in range(total):
+        if seq[i] is not None:
+            continue
+        candidatos = [e for e in ENQUADRAMENTOS if cabe(e, i)]
+        # Rede: se a vizinhança fechar todas as portas (só acontece se a tabela
+        # de enquadramentos perder membros), vale qualquer família diferente da
+        # anterior, e no limite qualquer um.
+        candidatos = candidatos or [
+            e for e in ENQUADRAMENTOS if not e.so_outros or orcamento > 0
+        ] or list(ENQUADRAMENTOS)
+        escolhido = rng.choices(candidatos, [e.peso for e in candidatos])[0]
+        seq[i] = escolhido
+        orcamento -= escolhido.so_outros
+
+    return [e for e in seq if e is not None]
+
+
 # ---- Movimento de câmera -----------------------------------------------------
 
 # Amplitudes do zoom lento de cada foto, e o quanto do espaço disponível a
@@ -322,9 +582,11 @@ class Variacao:
     humor: str
     forma: str
     tempero: str
+    gancho: str
     ancoras: dict[str, str]
     convidado: Personagem | None
     quantas_outros: int
+    enquadramentos: list[Enquadramento] = field(default_factory=list)
     movimentos: list[Movimento] = field(default_factory=list)
 
     def resumo(self) -> str:
@@ -334,6 +596,7 @@ class Variacao:
             f"  {rotulo}: {valor}"
             for rotulo, valor in (
                 ("semente", self.semente),
+                ("gancho", self.gancho),
                 ("tempo", self.clima),
                 ("época", self.calendario),
                 ("humor", self.humor),
@@ -341,17 +604,26 @@ class Variacao:
                 ("tempero", self.tempero),
                 ("visita", visita),
                 ("fotos de outros", str(self.quantas_outros)),
+                ("escala", " ".join(e.chave for e in self.enquadramentos)),
             )
         )
 
+    def indices_so_outros(self) -> list[int]:
+        """Beats cujo enquadramento não cabe numa selfie de pata esticada."""
+        return [i for i, e in enumerate(self.enquadramentos) if e.so_outros]
 
-def _movimentos(rng: random.Random, duracoes: list[float]) -> list[Movimento]:
+
+def _movimentos(
+    rng: random.Random,
+    duracoes: list[float],
+    enquadramentos: list[Enquadramento],
+) -> list[Movimento]:
     """Sorteia o movimento de cada foto, sem repetir o da anterior.
 
     A regra de não repetir é o ponto: dezesseis fotos com o mesmo zoom dão
     sensação de esteira transportadora, e é isso que denuncia que o vídeo é
-    montado. Com o corte a cada 2s ela pesa ainda mais do que pesava a cada 4s —
-    a repetição aparece no dobro da frequência.
+    montado. Com o corte caindo a cada segundo e pouco, a repetição aparece
+    numa frequência alta o bastante para ser reconhecida como padrão.
 
     A direção nova a cada corte também é o que marca a fronteira entre as fotos:
     a câmera recomeça visivelmente, em vez de dar a impressão de continuar.
@@ -359,8 +631,13 @@ def _movimentos(rng: random.Random, duracoes: list[float]) -> list[Movimento]:
     movimentos: list[Movimento] = []
     fecha = rng.random() < 0.5
     anterior = None
-    for duracao in duracoes:
-        amplitude = rng.uniform(*ZOOM_TAXA) * duracao
+    for duracao, enq in zip(duracoes, enquadramentos):
+        # A amplitude é escalada pela duração E pela escala do plano. Pela
+        # duração porque o movimento é uma taxa por segundo; pela escala porque
+        # um mesmo deslocamento em pixels é uma fração muito maior do campo de
+        # visão num macro do que num plano aberto — o pan que respira no aberto
+        # é tremor no olho do gato.
+        amplitude = rng.uniform(*ZOOM_TAXA) * duracao * enq.camera
         z_ini, z_fim = (
             (ZOOM_BASE, ZOOM_BASE + amplitude)
             if fecha
@@ -375,7 +652,7 @@ def _movimentos(rng: random.Random, duracoes: list[float]) -> list[Movimento]:
                 z_fim,
                 direcao[0],
                 direcao[1],
-                rng.uniform(*PAN_TAXA) * duracao,
+                rng.uniform(*PAN_TAXA) * duracao * enq.camera,
             )
         )
         # Alterna a direção do zoom na maior parte das vezes, mas nem sempre:
@@ -384,12 +661,12 @@ def _movimentos(rng: random.Random, duracoes: list[float]) -> list[Movimento]:
     return movimentos
 
 
-def sortear(duracoes: list[float], quando: datetime | None = None) -> Variacao:
+def sortear(quando: datetime | None = None) -> Variacao:
     """Sorteia o dia de hoje. A semente é a data + a hora do run.
 
-    Recebe as durações das fotos, e não a quantidade delas, porque o movimento
-    de câmera é sorteado em taxa por segundo: a foto de abertura, mais curta,
-    precisa de uma amplitude menor para se mover no mesmo ritmo das outras.
+    Sai sem os movimentos de câmera de propósito: eles dependem da duração de
+    cada foto, e a duração de cada foto só existe depois que o roteiro conta a
+    história do dia (ver `sortear_movimentos`).
     """
     agora = quando or datetime.now()
     semente = agora.strftime("%Y-%m-%d-%H")
@@ -397,6 +674,7 @@ def sortear(duracoes: list[float], quando: datetime | None = None) -> Variacao:
 
     clima, clima_en = rng.choice(CLIMAS)
     convidado = rng.choice(ELENCO) if rng.random() < CHANCE_CONVIDADO else None
+    quantas_outros = rng.randint(*FAIXA_OUTROS)
 
     return Variacao(
         semente=semente,
@@ -406,8 +684,27 @@ def sortear(duracoes: list[float], quando: datetime | None = None) -> Variacao:
         humor=rng.choice(HUMORES),
         forma=rng.choice(FORMAS),
         tempero=rng.choice(TEMPEROS),
+        gancho=rng.choice(GANCHOS),
         ancoras={rotulo: rng.choice(opcoes) for rotulo, opcoes in ANCORAS.items()},
         convidado=convidado,
-        quantas_outros=rng.randint(*FAIXA_OUTROS),
-        movimentos=_movimentos(rng, duracoes),
+        quantas_outros=quantas_outros,
+        enquadramentos=_sortear_enquadramentos(rng, TOTAL_IMAGENS, quantas_outros),
+    )
+
+
+def sortear_movimentos(var: Variacao, duracoes: list[float]) -> None:
+    """Preenche os movimentos de câmera, já sabendo quanto dura cada foto.
+
+    Recebe as durações, e não a quantidade de fotos, porque o movimento é
+    sorteado em taxa POR SEGUNDO: com as fotos durando de 1s a 3,5s, a mesma
+    amplitude de zoom seria três vezes mais rápida numa do que na outra — e
+    velocidade de zoom é justamente o que separa respiração de efeito.
+
+    O sorteio usa uma corrente própria (a semente do dia com um sufixo), e não a
+    do `sortear`. É o que mantém o run reproduzível mesmo tendo sido partido em
+    dois: o que o roteirista escreve entre uma chamada e outra não desloca mais
+    nada.
+    """
+    var.movimentos = _movimentos(
+        random.Random(f"{var.semente}-camera"), duracoes, var.enquadramentos
     )

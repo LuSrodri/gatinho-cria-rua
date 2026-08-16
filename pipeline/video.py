@@ -2,9 +2,9 @@
 
 O vídeo é montado como um story do Instagram assistido de fora:
 
-- as 16 fotos em corte seco, 2s cada (a primeira 1s), com um movimento lento de
-  câmera sorteado foto a foto (foto parada lê como travada; o movimento devolve
-  vida sem inventar ação que não existe);
+- as 16 fotos em corte seco, cada uma no tempo que a história pediu (a primeira
+  sempre 1s), com um movimento lento de câmera sorteado foto a foto (foto parada
+  lê como travada; o movimento devolve vida sem inventar ação que não existe);
 - a barra segmentada de stories no topo, uma divisão por foto, preenchendo em
   tempo real;
 - o @ do canal logo abaixo dela;
@@ -17,8 +17,9 @@ Duas fronteiras diferentes, tratadas ao contrário uma da outra:
 
 - a fronteira ENTRE FOTOS é para ser vista. Corte seco, sem dissolve, sem fade
   na legenda, movimento de câmera recomeçando do zero e uma divisão nova da
-  barra acendendo. A cada 2s o espectador percebe que virou a página, e é isso
-  que segura os 31s;
+  barra acendendo. O espectador percebe que virou a página, e é isso que segura
+  os 31s — mais ainda agora que o intervalo entre uma virada e a outra varia, e
+  ele não consegue mais prever quando vem a próxima;
 - a fronteira do VÍDEO — o fim voltando para o começo — é para não ser vista. Aí
   não há fade de saída no áudio, nem escurecimento, nem nada que anuncie o fim:
   a trilha entra em CAUDA_LOOP segundos de cruzamento que fazem o instante
@@ -39,22 +40,37 @@ from pathlib import Path
 
 from PIL import Image
 
-from .config import CAUDA_LOOP, DURACOES, DUR_TOTAL, INICIOS, RAIZ, Config
+from .config import CAUDA_LOOP, DUR_AUDIO, DUR_TOTAL, RAIZ, TAXA_AUDIO, Config, Ritmo
 from .variacao import Movimento, Variacao
 
 # Barra de stories, em pixels para um vídeo de 1080 de largura (escalada
 # proporcionalmente para outras larguras).
-BARRA_MARGEM = 24
-BARRA_TOPO = 26
+#
+# A barra desceu 60px e ganhou margem lateral, e as duas coisas são a mesma
+# ideia: colada no alto e quase encostando nas bordas, ela lia como um elemento
+# do PLAYER — uma barra de progresso do YouTube desenhada no lugar errado.
+# Descida e recuada, ela lê como a interface de story de um celular, com a faixa
+# vazia acima fazendo o papel da barra de status. É o que o vídeo quer que o
+# espectador pense que está vendo: o print do story de alguém, não um vídeo
+# montado. E a margem sobrando dos dois lados dá à foto uma borda que o
+# enquadramento não tinha.
+BARRA_MARGEM = 64
+BARRA_TOPO = 86
 BARRA_ALTURA = 6
 BARRA_VAO = 6
-# Degraus do preenchimento de cada divisão (ver _barra_stories). Dimensionado
-# para o degrau durar ~0,1s, que é o limiar em que o preenchimento deixa de se
-# ver pular: com a foto em 2s, são 20 degraus.
-PASSOS = 20
+
+# Degraus do preenchimento de cada divisão (ver _barra_stories), em segundos por
+# degrau. 0,1s é o limiar em que o preenchimento deixa de se ver pular. Virou
+# tempo, e não uma contagem fixa, porque as fotos deixaram de ter todas a mesma
+# duração: com um número fixo de degraus, o degrau da foto de 3,5s seria quase
+# três vezes o da foto de 1,3s, e só um dos dois seria imperceptível.
+PASSO_SEGUNDOS = 0.1
+PASSOS_FAIXA = (10, 40)  # piso e teto de degraus por divisão
 
 # Véu escuro do topo, para a barra e o @ não sumirem numa foto de céu claro.
-DEGRADE_ALTURA = 0.115  # fração da altura do vídeo
+# Ele acompanhou a descida da barra: um degradê que termina acima do que precisa
+# escurecer não escurece nada.
+DEGRADE_ALTURA = 0.17  # fração da altura do vídeo
 DEGRADE_OPACIDADE = 0.45  # alfa no topo, caindo a zero na base do degradê
 
 
@@ -121,45 +137,48 @@ def _cadeia_foto(indice: int, cfg: Config, frames: int, mov: Movimento) -> str:
     )
 
 
-def _barra_stories(cfg: Config, total: int) -> list[str]:
+def _barra_stories(cfg: Config, ritmo: Ritmo) -> list[str]:
     """Fundo e preenchimento da barra segmentada, uma divisão por foto.
 
     Com 16 divisões a barra também virou marcador de corte: cada foto acende uma
     divisão nova, então a fronteira entre duas fotos aparece no topo da tela
     mesmo quando as duas imagens têm enquadramento parecido.
 
-    As divisões são todas do MESMO tamanho, embora a primeira foto dure metade
-    das outras. É de propósito: a barra é a régua do formato, não do tempo, e uma
-    divisão pela metade seria lida como defeito. O que muda na primeira é só a
-    velocidade do preenchimento dela.
+    As divisões são todas do MESMO tamanho, embora as fotos durem de 1s a 3,5s.
+    É de propósito, e agora é uma escolha bem maior do que era: a barra é a régua
+    do FORMATO (dezesseis fotos, sempre), não do tempo. Divisões proporcionais à
+    duração denunciariam a foto longa antes de ela chegar — o espectador veria
+    que vem coisa boa, e a surpresa é metade do efeito. O que muda de uma divisão
+    para a outra é só a velocidade com que ela enche.
 
     O preenchimento é feito em degraus, e não com uma largura que cresce em
     função de `t`: o `drawbox` resolve `w` uma única vez, na inicialização do
     filtro, e só o `enable` é reavaliado a cada quadro. Então cada degrau é uma
-    caixa de largura fixa que acende na sua fatia de tempo. Com PASSOS=20 o
-    degrau tem ~3px numa divisão de ~59px, o que a 30fps não se distingue de um
-    preenchimento contínuo.
+    caixa de largura fixa que acende na sua fatia de tempo, e o número de degraus
+    é calculado por divisão para cada degrau durar PASSO_SEGUNDOS.
     """
     escala = cfg.video_largura / 1080
     margem = BARRA_MARGEM * escala
     vao = BARRA_VAO * escala
     topo = BARRA_TOPO * escala
     altura = BARRA_ALTURA * escala
+    total = len(ritmo)
     largura_seg = (cfg.video_largura - 2 * margem - (total - 1) * vao) / total
 
     filtros = []
     for i in range(total):
         x = margem + i * (largura_seg + vao)
-        inicio = INICIOS[i]
-        passo = DURACOES[i] / PASSOS
+        inicio, duracao = ritmo.inicios[i], ritmo.duracoes[i]
+        passos = min(max(round(duracao / PASSO_SEGUNDOS), PASSOS_FAIXA[0]), PASSOS_FAIXA[1])
+        passo = duracao / passos
         base = f"drawbox=x={x:.2f}:y={topo:.2f}:h={altura:.2f}"
 
         # Trilho apagado da divisão, sempre visível.
         filtros.append(f"{base}:w={largura_seg:.2f}:color=white@0.35:t=fill")
 
         # Os degraus do preenchimento, um aceso por vez.
-        for k in range(PASSOS):
-            largura = largura_seg * (k + 1) / PASSOS
+        for k in range(passos):
+            largura = largura_seg * (k + 1) / passos
             de = inicio + k * passo
             ate = de + passo
             filtros.append(
@@ -171,20 +190,26 @@ def _barra_stories(cfg: Config, total: int) -> list[str]:
         # como as stories já vistas no Instagram.
         filtros.append(
             f"{base}:w={largura_seg:.2f}:color=white@0.95:t=fill"
-            f":enable='gte(t\\,{inicio + DURACOES[i]:.3f})'"
+            f":enable='gte(t\\,{inicio + duracao:.3f})'"
         )
     return filtros
 
 
 def _handle(cfg: Config) -> str:
-    """O @ do canal, logo abaixo da barra de stories."""
+    """O @ do canal, logo abaixo da barra de stories.
+
+    Alinhado à esquerda da barra, e não a uma margem própria: as duas coisas
+    formam o cabeçalho do story, e cabeçalho com dois alinhamentos diferentes é
+    a primeira coisa que entrega que a interface é desenhada.
+    """
     escala = cfg.video_largura / 1080
     # `\:` porque dois-pontos separa opções dentro do drawtext.
     texto = f"{cfg.handle} · agora".replace(":", "\\:")
     return (
         f"drawtext=fontfile=fonts/Poppins-SemiBold.ttf:text='{texto}'"
         f":fontcolor=white@0.92:fontsize={round(30 * escala)}"
-        f":x={round(26 * escala)}:y={round(52 * escala)}"
+        f":x={round(BARRA_MARGEM * escala)}"
+        f":y={round((BARRA_TOPO + 26) * escala)}"
         f":shadowcolor=black@0.45:shadowx=0:shadowy={max(1, round(2 * escala))}"
     )
 
@@ -192,6 +217,7 @@ def _handle(cfg: Config) -> str:
 def montar_video(
     cfg: Config,
     var: Variacao,
+    ritmo: Ritmo,
     imagens: list[Path],
     legendas: Path,
     musica: Path | None,
@@ -202,10 +228,10 @@ def montar_video(
         raise SystemExit("ffmpeg não encontrado no PATH — sem ele não há vídeo.")
 
     total = len(imagens)
-    if total != len(DURACOES):
+    if total != len(ritmo):
         raise SystemExit(
-            f"Chegaram {total} fotos e o formato prevê {len(DURACOES)}. A barra de "
-            "stories e as legendas são calculadas a partir do formato — montar "
+            f"Chegaram {total} fotos e o ritmo prevê {len(ritmo)}. A barra de "
+            "stories e as legendas são calculadas a partir do ritmo — montar "
             "assim sairia dessincronizado."
         )
     veu = _gradiente(cfg, cfg.saida / "gradiente.png")
@@ -226,10 +252,18 @@ def montar_video(
         if musica is not None:
             comando += ["-i", str(musica.relative_to(RAIZ).as_posix())]
         else:
-            comando += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"]
+            # `-t` limita a entrada muda, que é infinita. Os `atrim` do filtro já
+            # a cortariam, mas depender disso é apostar a execução inteira num
+            # detalhe do filtergraph: se algum dia um ramo deixar de aparar, o
+            # ffmpeg fica codificando silêncio para sempre.
+            comando += [
+                "-f", "lavfi",
+                "-t", str(DUR_AUDIO + CAUDA_LOOP),
+                "-i", f"anullsrc=r={TAXA_AUDIO}:cl=stereo",
+            ]
 
     cadeias = [
-        _cadeia_foto(i, cfg, round(DURACOES[i] * cfg.fps), var.movimentos[i])
+        _cadeia_foto(i, cfg, round(ritmo.duracoes[i] * cfg.fps), var.movimentos[i])
         for i in range(total)
     ]
     concat = "".join(f"[v{i}]" for i in range(total)) + f"concat=n={total}:v=1:a=0[seq]"
@@ -238,7 +272,7 @@ def montar_video(
     # contrário, o véu escureceria justamente os dois elementos que ele existe
     # para tornar legíveis.
     veu_overlay = f"[seq][{total}:v]overlay=0:0[comveu]"
-    sobreposicoes = _barra_stories(cfg, total) + [_handle(cfg)]
+    sobreposicoes = _barra_stories(cfg, ritmo) + [_handle(cfg)]
     # `fontsdir` aponta para as fontes do repo: sem isso o libass cairia na
     # fonte padrão do sistema, que no contêiner não é a Poppins.
     sobreposicoes.append(
@@ -279,29 +313,43 @@ def montar_video(
     # cópia do arquivo, e o amix consome os dois em paralelo, sem exigir que um
     # deles termine primeiro.
     #
-    # O cruzamento em si é idêntico ao do acrossfade: `curve=tri` é ganho
-    # linear, então o fade de entrada do corpo (t/d) e o de saída da volta
-    # (1 - t/d) somam exatamente 1 em todo instante da sobreposição. Com
-    # `normalize=0` o amix soma sem reescalar, e o resultado é o mesmo áudio —
-    # com a diferença de que ele existe.
-    volta_de = DUR_TOTAL
-    volta_ate = DUR_TOTAL + CAUDA_LOOP
+    # A curva do cruzamento é `qsin`, e não a `tri` (linear) que o `acrossfade`
+    # usa por padrão. A diferença importa aqui:
+    #
+    # com ganho linear, os dois lados somam exatamente 1 em AMPLITUDE. Isso é o
+    # certo quando os dois lados são o mesmo som — a soma reconstrói o original.
+    # Mas os dois lados aqui NÃO são o mesmo som: são a mesma faixa em pontos
+    # diferentes dela, treze compassos de distância. Dois sinais diferentes não
+    # somam amplitude, somam potência, e no meio do cruzamento (0,5 + 0,5) a
+    # potência cai para metade — os 3 dB de buraco que todo mundo que já fez
+    # crossfade linear de material diferente conhece. Medido no anel: a energia
+    # do cruzamento caía para 0,70x a do resto.
+    #
+    # `qsin` é seno/cosseno, então é a SOMA DOS QUADRADOS que dá 1, e a potência
+    # fica constante. Mesma medida, mesma faixa: 0,97x. `normalize=0` no amix é o
+    # que faz o amix somar sem reescalar por cima disso.
+    #
+    # O corpo tem DUR_AUDIO, não DUR_TOTAL: 1,4ms a menos que o vídeo, para a
+    # faixa fechar um bloco cheio do AAC e o encoder não completar o último com
+    # silêncio bem em cima da volta do loop. O motivo inteiro está em config.py.
+    volta_de = DUR_AUDIO
+    volta_ate = DUR_AUDIO + CAUDA_LOOP
     audio = (
-        f"[{total + 1}:a]apad=whole_dur={volta_ate},atrim=0:{DUR_TOTAL},"
+        f"[{total + 1}:a]apad=whole_dur={volta_ate},atrim=0:{DUR_AUDIO},"
         f"asetpts=PTS-STARTPTS,"
-        f"afade=t=in:st=0:d={CAUDA_LOOP}:curve=tri[corpo];"
+        f"afade=t=in:st=0:d={CAUDA_LOOP}:curve=qsin[corpo];"
         # A volta é aparada do fim, deslocada para o zero e apagada por cima do
         # começo; o `apad` final a estica com silêncio até o fim do vídeo, para
         # o amix ter os dois ramos do mesmo tamanho e não inventar transição.
         f"[{total + 2}:a]apad=whole_dur={volta_ate},atrim={volta_de}:{volta_ate},"
         f"asetpts=PTS-STARTPTS,"
-        f"afade=t=out:st=0:d={CAUDA_LOOP}:curve=tri,apad=whole_dur={DUR_TOTAL}[volta];"
+        f"afade=t=out:st=0:d={CAUDA_LOOP}:curve=qsin,apad=whole_dur={DUR_AUDIO}[volta];"
         f"[corpo][volta]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,"
-        f"aformat=sample_rates=44100:channel_layouts=stereo[aout]"
+        f"aformat=sample_rates={TAXA_AUDIO}:channel_layouts=stereo[aout]"
     )
 
     # O filtergraph vai em ARQUIVO, não na linha de comando. Ele passa de 30 mil
-    # caracteres (são PASSOS degraus de barra por foto), e o Windows corta a
+    # caracteres (são dezenas de degraus de barra por foto), e o Windows corta a
     # linha de comando em 32.767 — o erro que aparece lá é "o nome do arquivo ou
     # a extensão é muito grande", que não sugere nem de longe o motivo real. O
     # Linux do contêiner aguentaria, mas um pipeline que só monta vídeo no
@@ -315,7 +363,11 @@ def montar_video(
         "-filter_complex_script", str(filtro.relative_to(RAIZ).as_posix()),
         "-map", "[vout]",
         "-map", "[aout]",
-        "-t", str(DUR_TOTAL),
+        # O corte é por CONTAGEM DE QUADROS, e só para o vídeo. Com `-t` valendo
+        # para as duas faixas, o áudio seria aparado junto e voltaria a terminar
+        # no meio de um bloco do AAC — que é justamente o que DUR_AUDIO evita. O
+        # comprimento do áudio já é garantido pelos `atrim` do filtro.
+        "-frames:v", str(round(DUR_TOTAL * cfg.fps)),
         "-r", str(cfg.fps),
         "-c:v", "libx264",
         "-preset", "medium",
@@ -328,7 +380,10 @@ def montar_video(
         str(destino.relative_to(RAIZ).as_posix()),
     ]
 
-    print(f"[video] Montando {destino.name} ({DUR_TOTAL:.0f}s, {total} fotos)...")
+    print(
+        f"[video] Montando {destino.name} ({DUR_TOTAL:.0f}s, {total} fotos: "
+        f"{ritmo.resumo()})..."
+    )
     resultado = subprocess.run(comando, cwd=RAIZ, capture_output=True, text=True)
     if resultado.returncode != 0:
         raise SystemExit(

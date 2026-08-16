@@ -10,12 +10,23 @@ Isso é de propósito — pedir variedade a um LLM devolve a média dele, que é
 lugar-comum. Com os parâmetros dados, ele gasta a criatividade no que sabe fazer
 bem: o detalhe concreto e a frase curta.
 
-Saem duas coisas por cena, em idiomas diferentes de propósito:
+Saem três coisas por cena, e as duas primeiras em idiomas diferentes de
+propósito:
 
 - ``cena``: descrição visual em INGLÊS, que vira prompt do gpt-image-2. Modelo
   de imagem entende inglês muito melhor, e o texto nunca aparece na tela.
 - ``legenda``: o texto em PORTUGUÊS que vai queimado no vídeo, escrito na voz
   dele — story de Instagram, primeira pessoa, curto.
+- ``ritmo``: quanto tempo a foto pede na tela. É a única decisão do roteirista
+  que sai do conteúdo e entra na MONTAGEM — a duração de cada corte deixou de
+  ser fixa e passou a ser contada pela história (ver `montar_ritmo` em
+  config.py).
+
+O que ele NÃO escolhe é a escala de plano: ela é sorteada em variacao.py, com a
+regra de nunca repetir a família de um corte para o outro, e chega aqui como
+fato. O roteirista escreve a cena PARA o enquadramento que recebeu — o que muda
+bastante o que ele escreve, porque num macro do olho não cabe uma travessia de
+rua e num plano aberto não cabe uma expressão de cara.
 """
 
 import json
@@ -31,18 +42,44 @@ from .variacao import Variacao
 # a um modelo e ele cumprir; o teto de caracteres continua existindo, mas como
 # rede de segurança do layout, não como a regra.
 #
-# De 3 a 6 palavras porque a foto fica 2s na tela e o corpo da fonte subiu para
-# 76px (legendas.py): é o que cabe em duas linhas grandes e se lê num relance.
-# Menos de 3 vira legenda-etiqueta ("café"), que não tem voz nenhuma.
+# De 3 a 6 palavras porque a foto mais curta fica pouco mais de um segundo na
+# tela e o corpo da fonte é grande (89px, legendas.py): é o que cabe em uma ou
+# duas linhas e se lê num relance. Menos de 3 vira legenda-etiqueta ("café"),
+# que não tem voz nenhuma.
 MIN_PALAVRAS = 3
 MAX_PALAVRAS = 6
 
 # Quantas vezes pedir o roteiro antes de desistir do run (ver gerar_roteiro).
 TENTATIVAS = 3
 
-# Teto de caracteres. Seis palavras compridas ainda estouram duas linhas a 76px,
-# e a legenda encolheria até deixar de competir com a foto.
-MAX_LEGENDA = 44
+# Teto de caracteres, e ele DESCEU de 44 para 36 quando a fonte subiu de 76 para
+# 89px. São a mesma decisão: a linha da legenda tem ~970px úteis, o que a 89px dá
+# umas 20 letras. 44 caracteres não cabiam em duas linhas nesse corpo — cabiam em
+# três, ou faziam a legenda encolher de volta para o tamanho de onde tinha saído.
+# Encurtar a frase é o que deixa a fonte crescer de verdade.
+MAX_LEGENDA = 36
+
+# Quantos segundos cada ritmo PRETENDE ficar na tela. O roteirista devolve o
+# nome do ritmo — é o que um modelo cumpre com precisão, enquanto pedir segundos
+# devolve números que não somam nada —, e `config.montar_ritmo` encaixa estas
+# durações nos 30s disponíveis.
+#
+# São durações, e não pesos abstratos, porque a média delas é o que decide o
+# resultado. Com pesos proporcionais, marcar uma cena como longa num vídeo com
+# muitas outras longas a encurtava; com durações pretendidas, uma distribuição
+# comum (algumas corridas, várias normais, uma ou duas longas) dá em média perto
+# de 2s por foto, o fator de encaixe fica perto de 1 e cada cena recebe
+# exatamente o tempo que pediu. O ajuste só aparece quando o dia sai da média.
+#
+# A distância entre "corrida" e "longa" é grande de propósito: se marcar uma cena
+# como longa a alonga em meio segundo, ninguém vê diferença nenhuma e o vídeo
+# continua com cara de metrônomo.
+RITMOS = {
+    "corrida": 1.4,
+    "normal": 1.95,
+    "demorada": 2.6,
+    "longa": 3.4,
+}
 
 # Sementes de rolê. Não entram no prompt como lista fechada de escolhas — entram
 # como EXEMPLOS do nível de especificidade que se espera. Sem elas o modelo cai
@@ -133,8 +170,19 @@ ESQUEMA = {
                                 "legenda do story, na voz dele."
                             ),
                         },
+                        "ritmo": {
+                            "type": "string",
+                            "enum": list(RITMOS),
+                            "description": (
+                                "Quanto esta foto pede de tempo na tela. "
+                                "'corrida' = foto de passagem, o olho pega de "
+                                "relance; 'normal' = o padrão; 'demorada' = tem "
+                                "detalhe ou emoção para ver; 'longa' = é o momento "
+                                "da história, precisa respirar. Poucas 'longa'."
+                            ),
+                        },
                     },
-                    "required": ["beat", "foto", "cena", "legenda"],
+                    "required": ["beat", "foto", "cena", "legenda", "ritmo"],
                 },
             },
         },
@@ -173,10 +221,14 @@ natural (nunca caricata, nunca "mano do céu" forçado). Tudo em minúsculas, co
 quem digita rápido no celular.
 
 O TAMANHO É REGRA DURA: de {MIN_PALAVRAS} a {MAX_PALAVRAS} palavras, no máximo
-{MAX_LEGENDA} caracteres. Não é preferência de estilo — a foto fica 2 segundos
-na tela e a legenda é grande. Sete palavras não são lidas antes do corte, e o
-que não é lido não existe. Corte artigo, corte explicação, corte a segunda
-ideia. Uma legenda = um pensamento.
+{MAX_LEGENDA} caracteres. Não é preferência de estilo — a foto pode ficar só um
+segundo e pouco na tela e a legenda é grande. Sete palavras não são lidas antes
+do corte, e o que não é lido não existe. Corte artigo, corte explicação, corte a
+segunda ideia. Uma legenda = um pensamento.
+
+Frase curta cabe em UMA linha, e uma linha só é o que se lê de relance. Duas
+linhas o vídeo aguenta; três, não. Na dúvida entre duas palavras e uma, escreva
+uma.
 
 O tom é INTIMISTA. Não é comédia escancarada e não é frase de efeito
 motivacional. É o pensamento solto de quem tá vivendo aquilo: meio sonolento,
@@ -227,6 +279,76 @@ Escreva "cena" em inglês, como quem descreve uma foto de celular: quem está no
 quadro, fazendo o quê, onde, e como está a luz. Nunca peça texto, letras, placas
 legíveis ou marcas na imagem.
 """
+
+
+RITMO = f"""\
+O RITMO (campo "ritmo" de cada cena)
+O vídeo não corta em intervalo fixo: cada foto fica na tela o tempo que a
+história pede, entre 1,3 e 3,5 segundos. Você decide isso cena a cena, e é o que
+transforma dezesseis fotos numa narrativa em vez de uma sequência.
+
+- "corrida": foto de passagem. O olho pega de relance e segue. Deslocamento,
+  caminho, chegada — o que só existe para levar de um lugar ao outro.
+- "normal": o padrão. Uma coisa acontecendo, sem peso especial.
+- "demorada": tem detalhe para ver, ou a legenda muda alguma coisa. O espectador
+  precisa de um instante a mais.
+- "longa": é O momento. O que aconteceu de melhor no rolê, a foto que ele
+  postaria com orgulho, o nascer do sol. Uma ou duas no vídeo inteiro, nunca
+  mais que três — se tudo é longo, nada é.
+
+Alterne. Duas ou três "corrida" seguidas antes de uma "demorada" é o que faz a
+"demorada" pesar. Uma sequência inteira de "normal" devolve o metrônomo que
+estamos tentando tirar. Distribua o peso pela história: o rolê é onde estão as
+longas, a rotina é onde estão as corridas.
+
+O beat 1 é exceção e não conta: ele tem 1 segundo cravado, sempre, seja qual for
+o ritmo que você escrever nele.
+"""
+
+
+def _gancho(var: Variacao) -> str:
+    """O bloco do gancho: a primeira foto tem uma função só dela."""
+    return f"""\
+O GANCHO (beat 1) — a parte mais importante do vídeo
+A primeira foto tem UM SEGUNDO para impedir a pessoa de rolar o feed, e o público
+é dono de gato. O que faz essa pessoa parar não é foto bonita de gato: é
+reconhecer o próprio gato. O comentário que se quer embaixo do vídeo é
+literalmente "MEU GATO FARIA ISSO KKKK".
+
+A situação de hoje já está escolhida, e é esta:
+>>> {var.gancho} <<<
+
+Escreva o campo "cena" do beat 1 descrevendo ESSA foto, em inglês, com o absurdo
+bem visível e imediato — o enquadramento tem que entregar a piada sozinho, sem a
+legenda ajudar. Continua sendo selfie de celular tirada por ele, e ele continua
+sendo um gato de verdade com anatomia de gato: nada de gato em pé, nada de gato
+segurando coisa com a mão. É a POSIÇÃO e o LUGAR que são absurdos, não o gato.
+
+A legenda do beat 1 é a reação dele à própria situação, e ela funciona como
+legenda de dono de gato postando o gato: sem explicar o que a foto já mostra, com
+a cara de pau ou o constrangimento de quem foi pego. Nada de "acordei" e nada de
+"bom dia" — descrever que ele acordou é a informação mais óbvia e mais inútil que
+essa foto tem.
+
+O beat 2 continua de dentro dessa mesma situação: ele ainda está ali, saindo dela
+devagar. Depois disso o dia segue normal.
+"""
+
+
+ESCALA = """\
+A ESCALA DE PLANO (já decidida — está na lista dos beats, uma por foto)
+Cada foto tem um enquadramento dado: macro no olho, plano médio, contra-plongée,
+plano aberto. Não é sugestão e não é sua escolha: escreva o campo "cena" PARA
+aquele enquadramento, descrevendo o que aparece no quadro naquela distância e
+naquele ângulo.
+
+Isso muda o que você escreve, e é o ponto. Num macro do olho não cabe "ele
+atravessa a rua": cabe o reflexo da rua inteira no olho dele. Num plano aberto
+não cabe a expressão da cara dele: cabe a rua, a hora do dia, os dois pequenos no
+meio de tudo. Um enquadramento fechado pede um detalhe; um aberto pede um lugar.
+
+A foto tem que funcionar naquela escala — não descreva algo que só se veria em
+outra."""
 
 
 def _numerar(indices: tuple[int, ...]) -> str:
@@ -293,9 +415,16 @@ def _prompt(var: Variacao, recentes: list[dict]) -> str:
     # exemplo é âncora, e mudar a âncora todo run é metade da variedade.
     semente = random.Random(var.semente).sample(EXEMPLOS_ROLE, 3)
     roteiro_beats = "\n".join(
-        f"{i + 1}. [{nome}] {desc}" for i, (nome, desc) in enumerate(BEATS)
+        f"{i + 1}. [{nome}] {desc}\n"
+        f"    ENQUADRAMENTO: {var.enquadramentos[i].resumo}"
+        + (" — nessa distância a pata dele não alcança o celular, então esta é "
+           "obrigatoriamente foto de OUTROS: ELE NÃO ESTÁ NO QUADRO. Escreva o "
+           "beat pelo lado do que ele está vendo, não pelo lado dele."
+           if var.enquadramentos[i].so_outros else "")
+        for i, (nome, desc) in enumerate(BEATS)
     )
     selfies = len(BEATS) - var.quantas_outros
+    forcadas = var.indices_so_outros()
     return f"""\
 Escreva o dia de hoje ({agora.strftime('%d/%m/%Y')}, {agora.strftime('%A')}) do
 canal. São {len(BEATS)} fotos, exatamente uma por beat, na ordem abaixo.
@@ -303,6 +432,12 @@ canal. São {len(BEATS)} fotos, exatamente uma por beat, na ordem abaixo.
 {PERSONAGEM}
 
 {VOZ}
+
+{_gancho(var)}
+
+{RITMO}
+
+{ESCALA}
 
 OS {len(BEATS)} BEATS (obrigatórios, nesta ordem — use o nome do beat no campo "beat")
 {roteiro_beats}
@@ -327,9 +462,12 @@ recomeça, e o espectador não pode receber aviso nenhum de que acabou.
 {_contexto_dia(var)}
 
 Exatamente {var.quantas_outros} das {len(BEATS)} fotos devem ser "outros" (foto
-que ele tirou de outros), e {selfies} devem ser "selfie". O beat 1 é sempre
-selfie. Não coloque duas fotos "outros" seguidas mais do que o necessário — com
-o corte a cada 2s, alternar entre ele e o que ele vê é o que dá respiração.
+que ele tirou, sem ele no quadro), e {selfies} devem ser "selfie". O beat 1 é
+sempre selfie. Os beats {_numerar(tuple(forcadas)) if forcadas else '(nenhum)'}
+já contam entre as "outros", porque o enquadramento deles não cabe numa selfie.
+Não coloque duas fotos "outros" seguidas mais do que o necessário — com o corte
+caindo a cada segundo e pouco, alternar entre ele e o que ele vê é o que dá
+respiração.
 
 {_contexto_recentes(recentes)}
 
@@ -417,6 +555,19 @@ def gerar_roteiro(cfg: Config, var: Variacao, recentes: list[dict]) -> dict:
 
     roteiro["cenas"] = cenas
 
+    # O enquadramento manda no tipo de foto, não o contrário. Um plano em que o
+    # gato é pequeno na rua não existe com a pata dele segurando o celular, e o
+    # prompt já avisa quais beats são esses — mas avisar não é garantir, e uma
+    # selfie pedida num plano aberto sai como um gato gigante flutuando sobre o
+    # bairro. Corrigir aqui é uma linha; descobrir depois custa uma imagem.
+    for i in var.indices_so_outros():
+        if cenas[i].get("foto") != "outros":
+            cenas[i]["foto"] = "outros"
+            print(
+                f"[roteiro] Beat {i + 1} ({BEATS[i][0]}) veio como selfie e o "
+                f"enquadramento é '{var.enquadramentos[i].chave}'; virou foto de outros."
+            )
+
     # Legenda estourada é falha de layout, não de conteúdo: cortar aqui é melhor
     # do que deixar a caixa de story cobrir metade da foto. O corte é sempre em
     # palavra inteira, nos dois limites — legenda terminada no meio de uma
@@ -433,3 +584,17 @@ def gerar_roteiro(cfg: Config, var: Variacao, recentes: list[dict]) -> dict:
 
     print(f"[roteiro] '{roteiro.get('titulo', '')}' — {len(cenas)} cenas.")
     return roteiro
+
+
+def duracoes_pretendidas(roteiro: dict) -> list[float]:
+    """Traduz o ritmo escrito em cada cena para os segundos que ela pretende durar.
+
+    Ritmo ausente ou desconhecido vira "normal" em vez de derrubar a execução: o
+    ritmo é uma melhora do vídeo, não um requisito dele, e um Short com uma cena
+    no tempo padrão continua sendo um Short. O schema já exige o campo — isto
+    aqui é a rede para o dia em que ele mudar.
+    """
+    return [
+        RITMOS.get((cena.get("ritmo") or "").strip().lower(), RITMOS["normal"])
+        for cena in roteiro["cenas"]
+    ]

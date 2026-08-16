@@ -3,9 +3,10 @@
 Um gato laranja de rua, adolescente, de um bairro arborizado da periferia de São
 Paulo. Ele acorda no fim da tarde, toma um café, chama o amigo Black, passa a
 noite no rolê e pega o busão para a escola quando o sol nasce. Todo dia. O vídeo
-é o story que ele postou: 16 fotos tiradas por ele, 2 segundos cada (a primeira
-1s), 31 segundos no total — e o fim volta para o começo sem emenda, porque o
-Short reinicia sozinho e o último beat do dia é vizinho do primeiro.
+é o story que ele postou: 16 fotos tiradas por ele, cada uma no tempo que a
+história daquele dia pediu (a primeira sempre 1s), 31 segundos no total — e o
+fim volta para o começo sem emenda, porque o Short reinicia sozinho e o último
+beat do dia é vizinho do primeiro.
 
     python main.py                  # gera e publica
     python main.py --sem-publicar   # gera e para (para conferir o arquivo)
@@ -16,13 +17,15 @@ Passo a passo:
 1. variacao.sortear — o tempero de hoje (tempo, humor, visita, movimento). É a
    primeira coisa da execução porque todo o resto é escrito em cima dele.
 2. youtube.ultimos_publicados — o que já foi ao ar, para não repetir o rolê.
-3. roteiro.gerar_roteiro (gpt-5.6-luna) — os 16 beats do dia e as legendas.
-4. imagens.gerar_imagens (gpt-image-2) — as 16 fotos, com o mesmo gato em todas.
+3. roteiro.gerar_roteiro (gpt-5.6-luna) — os 16 beats do dia, as legendas e o
+   peso de cada foto no relógio do vídeo.
+4. config.montar_ritmo — os pesos viram segundos, e os segundos viram quadros.
+5. imagens.gerar_imagens (gpt-image-2) — as 16 fotos, com o mesmo gato em todas.
    musica.gerar_musica (ElevenLabs) roda em paralelo, porque as duas esperas são
    de rede e não dependem uma da outra.
-5. legendas.gerar_legendas — o .ass das caixas de story.
-6. video.montar_video (ffmpeg) — corte seco, câmera lenta, barra de stories.
-7. youtube.publicar — sobe o Short.
+6. legendas.gerar_legendas — o .ass das caixas de story.
+7. video.montar_video (ffmpeg) — corte seco, câmera lenta, barra de stories.
+8. youtube.publicar — sobe o Short.
 """
 
 import argparse
@@ -42,7 +45,7 @@ from pipeline import (
     video,
     youtube,
 )
-from pipeline.config import DURACOES, carregar_config
+from pipeline.config import montar_ritmo, carregar_config
 
 
 def _nome_arquivo(titulo: str, limite: int = 60) -> str:
@@ -78,10 +81,17 @@ def main() -> None:
     # O sorteio vem antes de tudo: o roteiro é escrito em cima dele, as imagens
     # herdam o tempo do dia e o vídeo herda o movimento de câmera. Uma semente
     # só para a execução inteira é o que mantém as três coisas coerentes.
-    var = variacao.sortear(DURACOES, inicio)
+    var = variacao.sortear(inicio)
 
     recentes = youtube.ultimos_publicados(cfg)
     plano = roteiro.gerar_roteiro(cfg, var, recentes)
+
+    # O ritmo do vídeo é decidido AQUI, entre o roteiro e a montagem, porque só
+    # agora existem as duas coisas de que ele precisa: a história (que diz qual
+    # foto merece ficar) e a configuração (que diz quantos quadros por segundo
+    # arredondar). Barra de stories, legendas e câmera passam a ler dele.
+    ritmo = montar_ritmo(roteiro.duracoes_pretendidas(plano), cfg.fps)
+    variacao.sortear_movimentos(var, ritmo.duracoes)
 
     # Imagens e trilha são as duas esperas longas da execução e não dependem uma
     # da outra: rodar em série dobraria o tempo do cron sem motivo.
@@ -91,10 +101,14 @@ def main() -> None:
         fotos = imagens.gerar_imagens(cfg, plano, var)
         trilha = futuro_musica.result()
 
-    arquivo_legendas = legendas.gerar_legendas(cfg, plano, cfg.saida / "legendas.ass")
+    arquivo_legendas = legendas.gerar_legendas(
+        cfg, plano, ritmo, cfg.saida / "legendas.ass"
+    )
 
     destino = cfg.saida / f"{_nome_arquivo(plano['titulo'])}.mp4"
-    arquivo = video.montar_video(cfg, var, fotos, arquivo_legendas, trilha, destino)
+    arquivo = video.montar_video(
+        cfg, var, ritmo, fotos, arquivo_legendas, trilha, destino
+    )
 
     if args.sem_publicar:
         print(f"\n[fim] Vídeo pronto em {arquivo} (não publicado, --sem-publicar).")

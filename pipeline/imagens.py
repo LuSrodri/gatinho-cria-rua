@@ -27,7 +27,7 @@ from pathlib import Path
 from openai import OpenAI
 
 from .config import BEATS, Config
-from .variacao import Variacao
+from .variacao import Enquadramento, Variacao
 
 TENTATIVAS = 3
 
@@ -88,16 +88,24 @@ THE BLACK CAT — his friend "Black": a short-haired solid black cat with a glos
 coat and bright yellow eyes, friendly and talkative-looking, a bit stockier than
 the orange cat. Also a REAL cat with normal cat anatomy."""
 
+# Estes dois blocos dizem QUEM está no quadro, e só isso. A DISTÂNCIA e o ÂNGULO
+# vêm do enquadramento sorteado (variacao.py), num bloco à parte.
+#
+# Antes estava tudo junto aqui, e era o defeito de fábrica do canal: a selfie
+# dizia "low angle, close to his face" e a foto de outros dizia "from a short
+# distance". Dezesseis fotos e duas distâncias — o vídeo virava slideshow por
+# construção, e nenhuma variação de duração de corte podia consertar isso, porque
+# o problema não era o tempo, era o olho não ter que reajustar nada.
 SELFIE = """\
-SHOT TYPE — a front-camera selfie taken by the orange cat himself. One front paw
-is stretched toward the camera holding the phone, so it is large and slightly
-soft in the foreground. Low angle, tilted, close to his face, wide-angle
-distortion at the edges. He is looking into the lens."""
+SHOT TYPE — a photo the orange cat took of himself with his own phone. One front
+paw is stretched toward the camera holding it, so the paw is large and slightly
+soft in the foreground, and there is wide-angle distortion toward the edges. He
+is aware of the lens."""
 
 OUTROS = """\
-SHOT TYPE — a photo the orange cat took of other cats. He is NOT in the frame at
-all. Candid, taken from a short distance, slightly crooked framing, as if he
-raised the phone quickly to capture the moment."""
+SHOT TYPE — a photo the orange cat took of what he was looking at. He is NOT in
+the frame at all. Candid and unposed, slightly crooked, as if he raised the phone
+quickly to catch the moment."""
 
 
 def _clima(var: Variacao) -> str:
@@ -125,16 +133,25 @@ def _presentes(cena: dict, var: Variacao) -> list[tuple[str, str]]:
     return [(chave, bloco) for chave, bloco in _personagens(var) if chave in texto]
 
 
-def _prompt(cena: dict, var: Variacao) -> str:
+def _prompt(cena: dict, var: Variacao, enquadramento: Enquadramento) -> str:
     partes = [ESTILO, _clima(var), GATO]
     partes += [bloco for _, bloco in _presentes(cena, var)]
     partes.append(SELFIE if cena.get("foto") == "selfie" else OUTROS)
+    # O enquadramento vem DEPOIS do tipo de foto: é a instrução mais específica
+    # das duas, e o gpt-image-2 dá mais peso ao que vem por último quando duas
+    # linhas falam do mesmo assunto.
+    partes.append(enquadramento.visual)
     partes.append(f"THE PHOTO — {(cena.get('cena') or '').strip()}")
     return "\n\n".join(partes)
 
 
 def _gerar(
-    cfg: Config, cena: dict, var: Variacao, destino: Path, referencias: list[Path]
+    cfg: Config,
+    cena: dict,
+    var: Variacao,
+    enquadramento: Enquadramento,
+    destino: Path,
+    referencias: list[Path],
 ) -> Path:
     """Gera uma foto e salva em ``destino``. Aborta a execução se não sair.
 
@@ -143,7 +160,7 @@ def _gerar(
     ainda com o corte a cada 2s, em que a foto repetida volta rápido.
     """
     cliente = OpenAI(api_key=cfg.openai_api_key)
-    prompt = _prompt(cena, var)
+    prompt = _prompt(cena, var, enquadramento)
 
     for tentativa in range(1, TENTATIVAS + 1):
         arquivos = []
@@ -161,7 +178,10 @@ def _gerar(
             if not dados:
                 raise RuntimeError("resposta sem b64_json")
             destino.write_bytes(base64.b64decode(dados))
-            print(f"[imagens] {destino.name} pronta ({cena.get('beat')}).")
+            print(
+                f"[imagens] {destino.name} pronta "
+                f"({cena.get('beat')}, {enquadramento.chave})."
+            )
             return destino
         except Exception as erro:  # noqa: BLE001 — tratado com retentativa
             if tentativa == TENTATIVAS:
@@ -212,7 +232,10 @@ def gerar_imagens(cfg: Config, roteiro: dict, var: Variacao) -> list[Path]:
         print(f"[imagens] Fixando o visual de {quem} nas cenas {ancoras}...")
         with ThreadPoolExecutor(max_workers=len(ancoras)) as executor:
             futuros = {
-                executor.submit(_gerar, cfg, cenas[i], var, nome(i), [cfg.referencia]): i
+                executor.submit(
+                    _gerar, cfg, cenas[i], var, var.enquadramentos[i],
+                    nome(i), [cfg.referencia],
+                ): i
                 for i in ancoras
             }
             for futuro, i in futuros.items():
@@ -235,7 +258,10 @@ def gerar_imagens(cfg: Config, roteiro: dict, var: Variacao) -> list[Path]:
     pendentes = [i for i in range(len(cenas)) if caminhos[i] is None]
     with ThreadPoolExecutor(max_workers=6) as executor:
         futuros = {
-            executor.submit(_gerar, cfg, cenas[i], var, nome(i), referencias(i)): i
+            executor.submit(
+                _gerar, cfg, cenas[i], var, var.enquadramentos[i],
+                nome(i), referencias(i),
+            ): i
             for i in pendentes
         }
         for futuro, i in futuros.items():
