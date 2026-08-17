@@ -257,20 +257,39 @@ mesma semente dá o mesmo dia com e sem arco, e comparar os dois runs é possív
 Um episódio especial ainda é um dia comum na vida dele, e é isso que impede o
 arco de virar outro canal.
 
-**`briga-1` — a briga com o Junin do Grau, parte 1.** O Junin é gato preto e
-branco, o moleque do grau: anda com a molecada das bikes, empina na descida e se
-acha o dono do pedaço. Ele fica *fora* do `ELENCO` sorteado de propósito — o
-elenco é de visitas simpáticas, e o Junin é o rival; se caísse no sorteio,
-apareceria numa noite de celebração sem que nada explicasse o que ele faz ali, e
-a treta queimaria numa aparição qualquer.
+**`briga-1` — a briga com o Junin do Grau, parte 1.** Nos três beats do rolê: a
+primeira encarada, a provocação, e o impasse em cima do muro que **não se
+resolve**. Briga de gato é encarada — costas arqueadas, pelo em pé, rabo de
+escova, miado grave —, nunca sangue e nunca ferimento: a régua do canal continua
+sendo paz, prosperidade e coisas boas, e a única coisa feia na foto é o clima
+entre os dois. O "parte 1" vive no título e na descrição; a legenda tem proibição
+explícita de escrever "continua" ou "amanhã tem mais", porque o Short reinicia
+sozinho e um aviso desses é exatamente o que denuncia que ele acabou.
 
-Nos três beats do rolê: a primeira encarada, a provocação, e o impasse em cima do
-muro que **não se resolve**. Briga de gato é encarada — costas arqueadas, pelo em
-pé, rabo de escova, miado grave —, nunca sangue e nunca ferimento: a régua do
-canal continua sendo paz, prosperidade e coisas boas, e a única coisa feia na foto
-é o clima entre os dois. O "parte 1" vive no título e na descrição; a legenda tem
-proibição explícita de escrever "continua" ou "amanhã tem mais", porque o Short
-reinicia sozinho e um aviso desses é exatamente o que denuncia que ele acabou.
+### O Junin do Grau é do elenco, não só do arco
+
+Gato preto e branco, o moleque do grau: anda com a molecada das bikes, empina na
+descida e se acha o dono do pedaço. Ele está no `ELENCO` e cai no sorteio como
+qualquer um — rival que só aparece no episódio dele não é personagem do bairro, é
+convidado especial, e o que faz o Black funcionar é ele estar lá todo dia.
+
+O que muda quando ele é sorteado é o **tamanho** da coisa. Nas `FORMAS` comuns a
+visita "aparece em uma ou duas fotos e é sentida nas outras" — um rival tratado
+assim vira enfeite. Então o Junin não usa aquela tabela: quando ele é a visita, o
+rolê sai de **`FORMAS_JUNIN`**, que são formas de rivalidade (uma disputa boba,
+uma aposta, um território, uma trégua, uma admiração escondida). O dia é sobre
+ele.
+
+E nenhuma delas é briga. A briga é o arco, e ela precisa continuar valendo alguma
+coisa: se toda aparição do Junin fosse treta, a parte 2 chegaria sem peso nenhum.
+No dia comum são alfinetada, disputa e encarada de longe, e várias formas acabam
+bem — um rival que às vezes é gente boa é mais interessante, e mais real, do que
+um antagonista de tempo integral.
+
+O sorteio da forma de rivalidade usa uma **corrente própria** (`semente-junin`).
+Tirar mais um número da corrente principal deslocaria tudo que vem depois dela, e
+o que vem depois inclui a escala de plano — o mesmo dia passaria a ter
+enquadramentos diferentes dependendo de quem caiu no sorteio da visita.
 
 ### A barra de stories
 

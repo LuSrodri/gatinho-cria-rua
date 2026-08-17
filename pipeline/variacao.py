@@ -41,6 +41,10 @@ from .config import TOTAL_IMAGENS
 # vídeos na semana reconhece a Mel e o Seu Bigode, e reconhecer é o que faz um
 # bairro parecer um bairro. O que o sorteio decide é quem aparece HOJE.
 #
+# Com sete no elenco e 70% de chance de ter visita, cada um cai em uns 10% dos
+# vídeos — quatro por dia, então mais ou menos três vezes por semana cada. É o
+# suficiente para virar rosto conhecido sem nenhum deles cansar.
+#
 # `visual` é em inglês porque vai direto para o gpt-image-2, do mesmo jeito que
 # o bloco do Black em imagens.py.
 
@@ -64,7 +68,42 @@ class Personagem:
         return (self.chave.lower(),) + tuple(a.lower() for a in self.apelidos)
 
 
+# O Junin do Grau, pedido nos comentários do canal ("faz a parte 1 da briga, eu
+# quero o gato preto e branco chamado de junin do grau"). Personagem de
+# espectador, e por isso ele existe: um canal de bairro fica maior quando quem
+# assiste consegue colocar alguém na rua.
+#
+# Ele está no ELENCO, e portanto pode ser sorteado como a visita de um dia
+# QUALQUER — não só no arco da briga. Eu tinha deixado ele de fora justamente
+# para proteger a treta de queimar numa aparição banal, e o Lucas mandou o
+# contrário: rival que só aparece no episódio dele não é personagem do bairro, é
+# convidado especial. Ele está certo — o que faz o Black funcionar é ele estar
+# lá todo dia.
+#
+# O risco que a decisão traz é real e tem conserto no lugar certo: um rival
+# sorteado para uma noite de CELEBRAÇÃO deixaria o roteirista sem saber o que
+# fazer com ele. Por isso o Junin não usa as FORMAS comuns — quando ele é a
+# visita, o rolê sai de FORMAS_JUNIN, que são formas de RIVALIDADE. E o `resumo`
+# dele diz explicitamente onde fica a linha: implicância e disputa todo dia,
+# briga de verdade só no arco.
+JUNIN = Personagem(
+    "Junin do Grau",
+    "gato preto e branco da outra rua, o moleque do grau. Anda com a molecada "
+    "das bikes, empina na descida e se acha o dono do pedaço. Não é vilão: é o "
+    "metido que todo bairro tem, e ele provoca. É o RIVAL — quando ele aparece, "
+    "o rolê é sobre ele, e não uma visita de passagem. Mas implicância não é "
+    "briga: no dia comum são alfinetada, disputa boba e encarada de longe, e os "
+    "dois acabam a noite empatados. Nunca violência, nunca ninguém machucado.",
+    "JUNIN DO GRAU — a black-and-white tuxedo cat: glossy black back, head and "
+    "tail, with a clean white chest and belly, white muzzle, four white paws and "
+    "a small white blaze between the eyes. Lean and wiry, cocky posture, ears "
+    "forward, one ear slightly nicked, bright green eyes with a confident stare. "
+    "About the same age as the orange cat. A REAL cat with normal cat anatomy.",
+    apelidos=("junin",),
+)
+
 ELENCO = [
+    JUNIN,
     Personagem(
         "Mel",
         "gata calico do sobrado azul da esquina. Mimada, dona da rua, finge que "
@@ -115,30 +154,6 @@ ELENCO = [
         "on his muzzle, bright green eyes. A REAL cat with normal cat anatomy.",
     ),
 ]
-
-# O Junin do Grau, pedido nos comentários do canal ("faz a parte 1 da briga, eu
-# quero o gato preto e branco chamado de junin do grau"). Personagem de
-# espectador, e por isso ele existe: um canal de bairro fica maior quando quem
-# assiste consegue colocar alguém na rua.
-#
-# Ele fica FORA do ELENCO, e isso é a decisão que importa aqui. O elenco é
-# sorteado — quem cai no sorteio aparece como visita simpática do rolê —, e o
-# Junin não é visita: é o rival. Se ele entrasse no sorteio, apareceria numa
-# noite de CELEBRAÇÃO ou de CUIDADO sem que nada explicasse o que ele está
-# fazendo ali, e a treta que ele carrega queimaria numa aparição qualquer. Ele
-# entra pelo ARCO, quando o episódio é dele.
-JUNIN = Personagem(
-    "Junin do Grau",
-    "gato preto e branco da outra rua, o moleque do grau. Anda com a molecada "
-    "das bikes, empina na descida e se acha o dono do pedaço. Não é vilão: é o "
-    "metido que todo bairro tem, e ele provoca.",
-    "JUNIN DO GRAU — a black-and-white tuxedo cat: glossy black back, head and "
-    "tail, with a clean white chest and belly, white muzzle, four white paws and "
-    "a small white blaze between the eyes. Lean and wiry, cocky posture, ears "
-    "forward, one ear slightly nicked, bright green eyes with a confident stare. "
-    "About the same age as the orange cat. A REAL cat with normal cat anatomy.",
-    apelidos=("junin",),
-)
 
 # ---- As tabelas do sorteio ---------------------------------------------------
 
@@ -227,6 +242,38 @@ FORMAS = [
     "um CUIDADO: eles tomam conta de alguém menor pelo resto da noite",
 ]
 
+# As formas do rolê QUANDO O JUNIN É A VISITA. Ele não usa a tabela de cima, e é
+# isso que o faz protagonista em vez de figurante: nas FORMAS comuns, a visita
+# "aparece em uma ou duas fotos e é sentida nas outras" — um rival tratado assim
+# vira enfeite, e um rival enfeitado não é rival.
+#
+# Todas são de rivalidade e nenhuma é briga. A briga é o ARCO, e ela precisa
+# continuar valendo alguma coisa: se toda aparição do Junin fosse treta, a parte
+# 2 não teria peso nenhum quando chegar. Aqui é a implicância do dia a dia — que
+# é, aliás, como rivalidade de moleque funciona de verdade.
+#
+# Repare que várias terminam bem. É de propósito: o canal é sobre paz e coisas
+# boas, e um rival que às vezes é gente boa é mais interessante (e mais real) do
+# que um antagonista de tempo integral.
+FORMAS_JUNIN = [
+    "uma DISPUTA boba: os dois querem a mesma coisa e a noite vira quem chega "
+    "primeiro. Ninguém sai machucado e a coisa nem era tão importante assim",
+    "uma PROVOCAÇÃO: o Junin chega se achando, mostra o que sabe fazer, e o "
+    "nosso finge que não ligou — mas ficou pensando naquilo a noite inteira",
+    "uma APOSTA: o Junin desafia, os dois topam, e o resultado sai empatado ou "
+    "engraçado demais para alguém cobrar",
+    "um TERRITÓRIO: o Junin está no lugar que era deles, e a noite é os dois "
+    "decidindo se encaram ou se dividem — e eles dividem, meio a contragosto",
+    "uma TRÉGUA: começa torto, mas acontece uma coisa que precisa dos três, e "
+    "eles se ajudam sem admitir que se ajudaram",
+    "uma ADMIRAÇÃO ESCONDIDA: o Junin faz algo que o nosso achou genuinamente "
+    "foda, e passa a noite inteira sem conseguir dizer isso",
+    "um DESENCONTRO: eles passam a noite quase cruzando com o Junin, ouvindo "
+    "falar dele, vendo o rastro do que ele aprontou — e só se veem no fim",
+    "uma COBRANÇA: sobrou uma coisa da última vez, o Junin cobra, e o assunto "
+    "acaba sendo menor do que os dois lembravam",
+]
+
 # O tempero: um fio solto que atravessa as 8 fotos. Uma coisa só, pequena.
 TEMPEROS = [
     "ele está juntando dinheiro (do jeito dele) para alguma coisa",
@@ -257,6 +304,12 @@ TEMPEROS = [
 # convidado do dia. O tempo, a época, o humor, o tempero, o gancho, os âncoras e
 # a escala de plano continuam sorteados — um episódio especial ainda é um dia
 # comum na vida dele, e é isso que impede o arco de virar outro canal.
+#
+# O arco NÃO é o único jeito de o Junin aparecer: ele está no ELENCO e cai no
+# sorteio como qualquer um. A diferença é o tamanho da coisa. Sorteado, é a
+# implicância do dia a dia (FORMAS_JUNIN); no arco, é a briga que a parte 2 vai
+# continuar. Se toda aparição dele fosse treta, a parte 2 chegaria sem peso
+# nenhum.
 
 
 @dataclass(frozen=True)
@@ -837,6 +890,15 @@ def sortear(quando: datetime | None = None, arco: Arco | None = None) -> Variaca
         quantas_outros=quantas_outros,
         enquadramentos=_sortear_enquadramentos(rng, TOTAL_IMAGENS, quantas_outros),
     )
+
+    # O dia em que a visita é o Junin não é um dia com visita: é um dia sobre o
+    # Junin. A forma vem da tabela de rivalidade, e de uma CORRENTE PRÓPRIA em
+    # vez da corrente principal — tirar mais um número de `rng` aqui deslocaria
+    # tudo que vem depois, e o que vem depois inclui a escala de plano. Com a
+    # corrente separada, o mesmo dia tem o mesmo enquadramento caia quem cair no
+    # sorteio da visita.
+    if convidado is JUNIN:
+        var.forma = random.Random(f"{semente}-junin").choice(FORMAS_JUNIN)
 
     if arco:
         var.arco = arco
