@@ -2,7 +2,7 @@
 
 O vídeo é montado como um story do Instagram assistido de fora:
 
-- as 16 fotos em corte seco, cada uma no tempo que a história pediu (a primeira
+- as 8 fotos em corte seco, cada uma no tempo que a história pediu (a primeira
   sempre 1s), com um movimento lento de câmera sorteado foto a foto (foto parada
   lê como travada; o movimento devolve vida sem inventar ação que não existe);
 - a barra segmentada de stories no topo, uma divisão por foto, preenchendo em
@@ -18,7 +18,7 @@ Duas fronteiras diferentes, tratadas ao contrário uma da outra:
 - a fronteira ENTRE FOTOS é para ser vista. Corte seco, sem dissolve, sem fade
   na legenda, movimento de câmera recomeçando do zero e uma divisão nova da
   barra acendendo. O espectador percebe que virou a página, e é isso que segura
-  os 31s — mais ainda agora que o intervalo entre uma virada e a outra varia, e
+  o vídeo — mais ainda agora que o intervalo entre uma virada e a outra varia, e
   ele não consegue mais prever quando vem a próxima;
 - a fronteira do VÍDEO — o fim voltando para o começo — é para não ser vista. Aí
   não há fade de saída no áudio, nem escurecimento, nem nada que anuncie o fim:
@@ -40,7 +40,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from .config import CAUDA_LOOP, DUR_AUDIO, DUR_TOTAL, RAIZ, TAXA_AUDIO, Config, Ritmo
+from .config import CAUDA_LOOP, RAIZ, TAXA_AUDIO, Config, Ritmo
 from .variacao import Movimento, Variacao
 
 # Barra de stories, em pixels para um vídeo de 1080 de largura (escalada
@@ -140,16 +140,17 @@ def _cadeia_foto(indice: int, cfg: Config, frames: int, mov: Movimento) -> str:
 def _barra_stories(cfg: Config, ritmo: Ritmo) -> list[str]:
     """Fundo e preenchimento da barra segmentada, uma divisão por foto.
 
-    Com 16 divisões a barra também virou marcador de corte: cada foto acende uma
-    divisão nova, então a fronteira entre duas fotos aparece no topo da tela
-    mesmo quando as duas imagens têm enquadramento parecido.
+    A barra também é marcador de corte: cada foto acende uma divisão nova, então
+    a fronteira entre duas fotos aparece no topo da tela mesmo quando as duas
+    imagens têm enquadramento parecido. Com 8 divisões em vez de 16 cada uma
+    ficou o dobro de larga, e a virada de página ficou mais visível, não menos.
 
     As divisões são todas do MESMO tamanho, embora as fotos durem de 1s a 3,5s.
-    É de propósito, e agora é uma escolha bem maior do que era: a barra é a régua
-    do FORMATO (dezesseis fotos, sempre), não do tempo. Divisões proporcionais à
-    duração denunciariam a foto longa antes de ela chegar — o espectador veria
-    que vem coisa boa, e a surpresa é metade do efeito. O que muda de uma divisão
-    para a outra é só a velocidade com que ela enche.
+    É de propósito, e é uma escolha bem maior do que era: a barra é a régua do
+    FORMATO (oito fotos, sempre), não do tempo. Divisões proporcionais à duração
+    denunciariam a foto longa antes de ela chegar — o espectador veria que vem
+    coisa boa, e a surpresa é metade do efeito. O que muda de uma divisão para a
+    outra é só a velocidade com que ela enche.
 
     O preenchimento é feito em degraus, e não com uma largura que cresce em
     função de `t`: o `drawbox` resolve `w` uma única vez, na inicialização do
@@ -236,6 +237,12 @@ def montar_video(
         )
     veu = _gradiente(cfg, cfg.saida / "gradiente.png")
 
+    # As duas durações do vídeo, e elas não são a mesma: `ritmo.total` é o que a
+    # história somou e `ritmo.audio` é isso aparado até fechar um bloco do AAC.
+    # Trocar uma pela outra devolve o silêncio de fim de bloco exatamente na
+    # volta do loop (o porquê inteiro está em config.py).
+    dur_audio = ritmo.audio
+
     comando = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"]
     for imagem in imagens:
         comando += ["-i", str(imagem.relative_to(RAIZ).as_posix())]
@@ -258,7 +265,7 @@ def montar_video(
             # ffmpeg fica codificando silêncio para sempre.
             comando += [
                 "-f", "lavfi",
-                "-t", str(DUR_AUDIO + CAUDA_LOOP),
+                "-t", str(dur_audio + CAUDA_LOOP),
                 "-i", f"anullsrc=r={TAXA_AUDIO}:cl=stereo",
             ]
 
@@ -282,7 +289,7 @@ def montar_video(
 
     # A trilha é costurada em anel, não aparada com fade nas pontas.
     #
-    # A faixa vem com DUR_TOTAL + CAUDA_LOOP de duração. O trecho que sobra no
+    # A faixa vem com `ritmo.audio` + CAUDA_LOOP de duração. O trecho que sobra no
     # fim (a "volta") é cruzado por cima dos primeiros CAUDA_LOOP segundos do
     # corpo: durante esse cruzamento o espectador ouve o que a música TERIA
     # tocado depois do fim do vídeo desaparecendo enquanto o começo aparece. O
@@ -305,9 +312,9 @@ def montar_video(
     # único quadro e o encoder AAC morre sem nunca saber o formato. O motivo é
     # que o `acrossfade` só emite depois de ler a PRIMEIRA entrada inteira, e a
     # primeira entrada (a volta) é o fim do arquivo: para chegar lá, o `asplit`
-    # precisa empurrar 31s pelo outro ramo, que ninguém está consumindo. O 8.1.1
-    # tolera esse acúmulo; o 7.1 desiste. Verificado nas duas versões, variante
-    # por variante — só a dupla asplit+acrossfade quebra.
+    # precisa empurrar o laço inteiro pelo outro ramo, que ninguém está
+    # consumindo. O 8.1.1 tolera esse acúmulo; o 7.1 desiste. Verificado nas
+    # duas versões, variante por variante — só a dupla asplit+acrossfade quebra.
     #
     # Daí as duas entradas independentes e o `amix`: cada ramo lê sua própria
     # cópia do arquivo, e o amix consome os dois em paralelo, sem exigir que um
@@ -319,7 +326,7 @@ def montar_video(
     # com ganho linear, os dois lados somam exatamente 1 em AMPLITUDE. Isso é o
     # certo quando os dois lados são o mesmo som — a soma reconstrói o original.
     # Mas os dois lados aqui NÃO são o mesmo som: são a mesma faixa em pontos
-    # diferentes dela, treze compassos de distância. Dois sinais diferentes não
+    # diferentes dela, um laço inteiro de distância. Dois sinais diferentes não
     # somam amplitude, somam potência, e no meio do cruzamento (0,5 + 0,5) a
     # potência cai para metade — os 3 dB de buraco que todo mundo que já fez
     # crossfade linear de material diferente conhece. Medido no anel: a energia
@@ -329,13 +336,14 @@ def montar_video(
     # fica constante. Mesma medida, mesma faixa: 0,97x. `normalize=0` no amix é o
     # que faz o amix somar sem reescalar por cima disso.
     #
-    # O corpo tem DUR_AUDIO, não DUR_TOTAL: 1,4ms a menos que o vídeo, para a
-    # faixa fechar um bloco cheio do AAC e o encoder não completar o último com
-    # silêncio bem em cima da volta do loop. O motivo inteiro está em config.py.
-    volta_de = DUR_AUDIO
-    volta_ate = DUR_AUDIO + CAUDA_LOOP
+    # O corpo tem `ritmo.audio`, não `ritmo.total`: alguns décimos de
+    # milissegundo a menos que o vídeo, para a faixa fechar um bloco cheio do AAC
+    # e o encoder não completar o último com silêncio bem em cima da volta do
+    # loop. O motivo inteiro está em config.py.
+    volta_de = dur_audio
+    volta_ate = dur_audio + CAUDA_LOOP
     audio = (
-        f"[{total + 1}:a]apad=whole_dur={volta_ate},atrim=0:{DUR_AUDIO},"
+        f"[{total + 1}:a]apad=whole_dur={volta_ate},atrim=0:{dur_audio},"
         f"asetpts=PTS-STARTPTS,"
         f"afade=t=in:st=0:d={CAUDA_LOOP}:curve=qsin[corpo];"
         # A volta é aparada do fim, deslocada para o zero e apagada por cima do
@@ -343,7 +351,7 @@ def montar_video(
         # o amix ter os dois ramos do mesmo tamanho e não inventar transição.
         f"[{total + 2}:a]apad=whole_dur={volta_ate},atrim={volta_de}:{volta_ate},"
         f"asetpts=PTS-STARTPTS,"
-        f"afade=t=out:st=0:d={CAUDA_LOOP}:curve=qsin,apad=whole_dur={DUR_AUDIO}[volta];"
+        f"afade=t=out:st=0:d={CAUDA_LOOP}:curve=qsin,apad=whole_dur={dur_audio}[volta];"
         f"[corpo][volta]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,"
         f"aformat=sample_rates={TAXA_AUDIO}:channel_layouts=stereo[aout]"
     )
@@ -365,9 +373,9 @@ def montar_video(
         "-map", "[aout]",
         # O corte é por CONTAGEM DE QUADROS, e só para o vídeo. Com `-t` valendo
         # para as duas faixas, o áudio seria aparado junto e voltaria a terminar
-        # no meio de um bloco do AAC — que é justamente o que DUR_AUDIO evita. O
-        # comprimento do áudio já é garantido pelos `atrim` do filtro.
-        "-frames:v", str(round(DUR_TOTAL * cfg.fps)),
+        # no meio de um bloco do AAC — que é justamente o que `ritmo.audio`
+        # evita. O comprimento do áudio já é garantido pelos `atrim` do filtro.
+        "-frames:v", str(round(ritmo.total * cfg.fps)),
         "-r", str(cfg.fps),
         "-c:v", "libx264",
         "-preset", "medium",
@@ -381,7 +389,7 @@ def montar_video(
     ]
 
     print(
-        f"[video] Montando {destino.name} ({DUR_TOTAL:.0f}s, {total} fotos: "
+        f"[video] Montando {destino.name} ({ritmo.total:.2f}s, {total} fotos: "
         f"{ritmo.resumo()})..."
     )
     resultado = subprocess.run(comando, cwd=RAIZ, capture_output=True, text=True)

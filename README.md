@@ -1,7 +1,8 @@
 # Gatinho Cria da Rua
 
 Automação do canal [@GatinhoCriaDaRua](https://www.youtube.com/@GatinhoCriaDaRua).
-Cada execução gera e publica **um Short de 31 segundos que dá a volta em loop**.
+Cada execução gera e publica **um Short que dá a volta em loop**, com a duração
+que a história daquele dia somar (uns 16 segundos em média).
 
 ## A ideia
 
@@ -10,12 +11,12 @@ Paulo. Ele acorda no fim da tarde, toma um café na laje, chama o amigo **Black*
 (gato preto, simpático, sempre negociando alguma coisa), passa a noite no rolê e
 pega o busão para a escola quando o sol nasce. Todo dia.
 
-O vídeo é o **story que ele postou**: 16 fotos tiradas por ele — ou selfie de
+O vídeo é o **story que ele postou**: 8 fotos tiradas por ele — ou selfie de
 pata esticada, ou foto que ele bateu de outros gatos —, com legenda de story em
 cima e uma barra de stories correndo no topo.
 
 A rotina é fixa de propósito: é o que dá formato reconhecível ao canal. O que
-muda todo dia são o gancho da primeira foto, os quatro beats do rolê e o que
+muda todo dia são o gancho da primeira foto, os três beats do rolê e o que
 `variacao.py` sorteia.
 
 ### A primeira foto é um gancho
@@ -32,34 +33,61 @@ O sorteio é em Python, e não um "seja criativo" no prompt, pelo mesmo motivo d
 todo o resto de `variacao.py`: pedir criatividade a um LLM devolve a média dele,
 que aqui é gato fofo dormindo ao sol.
 
-### O ritmo é contado pela história
+### O ritmo é contado pela história, e a duração também
 
-As fotos **não duram todas o mesmo tempo**. A primeira dura 1s cravado; as
-outras quinze duram entre 1,3s e 3,5s, e quem decide é o roteiro: cada cena volta
-do `gpt-5.6-luna` com um campo `ritmo` (`corrida`, `normal`, `demorada`,
-`longa`), e `config.montar_ritmo` encaixa as durações pretendidas nos 30s que
-sobram, por bisseção, respeitando o piso e o teto.
+As fotos **não duram todas o mesmo tempo**. A primeira dura 1s cravado; as outras
+sete duram entre 1,3s e 3,5s, e quem decide é o roteiro: cada cena volta do
+`gpt-5.6-luna` com um campo `ritmo` (`corrida`, `normal`, `demorada`, `longa`), e
+`config.montar_ritmo` converte para quadros inteiros.
 
-Antes eram 2s cravados para todas. O problema de 2s cravados não é a duração, é a
-**regularidade**: um corte exatamente a cada dois segundos, dezesseis vezes, vira
-metrônomo — o olho aprende o intervalo em três fotos e passa a esperar o próximo
-corte em vez de olhar a foto. Com o ritmo irregular, a foto que carrega a piada
-do rolê fica o tempo de a piada acontecer, as fotos de passagem passam mesmo, e o
-espectador não consegue prever a próxima virada.
+Duração cravada não é problema pela duração, é pela **regularidade**: um corte
+exatamente no mesmo intervalo, foto após foto, vira metrônomo — o olho aprende o
+intervalo em três fotos e passa a esperar o próximo corte em vez de olhar a foto.
+Com o ritmo irregular, a foto que carrega a piada do rolê fica o tempo de a piada
+acontecer, as fotos de passagem passam mesmo, e o espectador não consegue prever
+a próxima virada.
 
-O total continua **fixo em 31s**: a trilha é encomendada com esse tamanho antes
-de o vídeo existir, e o loop de áudio depende de saber a duração exata de
-antemão. O que a história decide é como repartir os 31s, não quantos são.
+**Não existe mais total fixo.** Eram 31s cravados, e o orçamento fechado era
+encanamento, não edição: a trilha é encomendada com o tamanho do vídeo, e quem
+encomendava precisava saber esse tamanho antes de o vídeo existir. Isso deixou de
+ser verdade quando o ritmo passou a ser montado *entre* o roteiro e a montagem —
+no instante em que a ElevenLabs é chamada, as oito durações já estão decididas, e
+o tamanho do laço vai junto no pedido.
+
+Com orçamento fechado, a história dizia só a *proporção* e o relógio dizia o
+resto: o dia de fotos rápidas era esticado até encher os 31s e o dia que pedia
+tempo era espremido até caber neles. Agora a história diz as duas coisas. Os
+limites são de construção: 1s da primeira mais sete fotos entre 1,3s e 3,5s dão
+de **10,1s a 25,5s**, e na distribuição comum o vídeo fecha perto de 16s.
+
+### Por que 8 fotos
+
+Foram 8, depois 16, e agora 8 outra vez — mas não é desfazer a ida para 16. O que
+foi para 16 e **ficou** foi o ritmo variável: com 4s cravados cada, oito fotos
+eram oito paradas iguais; com 1,3s a 3,5s decididos pela história, são oito fotos
+em que a que carrega o momento fica quase três vezes mais que a de passagem.
+
+O que encolheu foi a **rotina**, não o rolê. Os beats que sumiram são os de
+passagem — espreguiçar, o portão, o encontro em si, o ponto de ônibus vazio —,
+cada um uma foto que só levava de um lugar ao outro. O rolê perdeu um dos quatro
+e ficou com três, que é o que uma história com começo, meio e fim precisa. Cada
+beat que ficou carrega mais de um momento: o café é também o acordar de vez, a
+madrugada é também a volta, o busão é também o nascer do sol.
+
+Os oito beats: `acordar` (o gancho), `cafe`, `chamar_black`, `role_1`, `role_2`,
+`role_3`, `madrugada`, `busao`.
 
 ### A escala de plano
 
 Ritmo de corte sozinho não faz ritmo visual. O enquadramento estava congelado
 dentro dos blocos de `imagens.py`: **toda** selfie era "low angle, close to his
-face" e **toda** foto de outros era "from a short distance". Dezesseis fotos,
-duas distâncias — o vídeo era slideshow por construção, e variar a duração dos
-cortes não podia consertar isso, porque o problema não era o tempo. Ritmo visual
-é contraste de escala: o olho tem que reajustar a cada corte, e é o reajuste que
-dá a sensação de montagem.
+face" e **toda** foto de outros era "from a short distance". Duas distâncias para
+o vídeo inteiro — ele era slideshow por construção, e variar a duração dos cortes
+não podia consertar isso, porque o problema não era o tempo. Ritmo visual é
+contraste de escala: o olho tem que reajustar a cada corte, e é o reajuste que dá
+a sensação de montagem. Com 8 fotos isso pesa mais, não menos: são metade das
+oportunidades de contrastar, e cada foto fica na tela mais tempo para o olho
+reparar que ela é do mesmo tamanho da anterior.
 
 São oito enquadramentos em três famílias, sorteados em `variacao.py`:
 
@@ -75,15 +103,17 @@ Três garantias, e cada uma existe porque sem ela o sorteio devolve slideshow:
    trabalho — dois planos médios diferentes seguidos ainda são duas fotos do
    mesmo tamanho;
 2. **macro, aberto e contra-plongée aparecem sempre**, um em cada terço do vídeo.
-   Sorteio livre às vezes devolvia dezesseis fotos entre médio e close, que é
-   justamente a média de onde se está saindo;
+   Sorteio livre às vezes devolvia um vídeo inteiro entre médio e close, que é
+   justamente a média de onde se está saindo. Em 8 fotos os três obrigatórios
+   ocupam quase metade da sequência, e é para ocuparem: com poucas fotos, uma
+   escala que não aparece não aparece mesmo;
 3. os enquadramentos que **não cabem numa selfie** (a pata não alcança o celular
    a essa distância) viram foto de outros, e o roteirista é avisado de escrever
    aquele beat pelo lado do que ele está vendo.
 
-A média por vídeo fica em ~5 planos fechados, ~7 médios e ~3,5 abertos: o rosto
-dele continua na tela na maior parte do tempo, que é o que um canal de
-personagem não pode perder.
+Sobre o resto da sequência, o sorteio ainda favorece plano médio e close: o rosto
+dele continua na tela na maior parte do tempo, que é o que um canal de personagem
+não pode perder.
 
 O **movimento de câmera anda junto com a escala**, e não é enfeite: a mesma
 amplitude de pan que respira num plano aberto vira tremor num macro do olho,
@@ -102,7 +132,7 @@ O formato inteiro sai de tratar duas fronteiras de maneiras opostas.
 
 **A fronteira entre fotos é para ser vista.** O corte é seco, a legenda troca no
 mesmo quadro (sem `\fad`), a câmera recomeça em outra direção e uma divisão nova
-acende na barra do topo. É o que segura os 31s: dezesseis viradas de página, em
+acende na barra do topo. É o que segura o vídeo: oito viradas de página, em
 intervalos que o espectador não consegue antecipar.
 
 **A fronteira do vídeo é para não ser vista.** O Short reinicia sozinho, então o
@@ -113,7 +143,7 @@ espectador vê duas vezes. Nada anuncia o fim:
   são cruzados por cima do começo dela (em `video.py`), então a amostra seguinte
   à última é a primeira. Fazer isso soar como loop de verdade deu bem mais
   trabalho do que parece — ver [A trilha dá a volta](#a-trilha-dá-a-volta);
-- o **roteiro não se despede**. O beat 16 é o busão para a escola e o beat 1 é
+- o **roteiro não se despede**. O beat 8 é o busão para a escola e o beat 1 é
   ele acordando: são vizinhos, não pontas. O prompt proíbe "até amanhã", resumo
   do dia e qualquer fecho;
 - a **primeira foto dura 1s**, metade das outras. Na volta do loop ela atravessa
@@ -123,24 +153,29 @@ espectador vê duas vezes. Nada anuncia o fim:
 ## Como funciona
 
 ```
+variacao.arco_de             o episódio pedido, se houver (--arco / env ARCO)
 variacao.sortear             o tempero de hoje: gancho, tempo, humor, visita
         ↓                    e a escala de plano de cada foto
 youtube.ultimos_publicados   o que já foi ao ar, para o rolê de hoje não repetir
         ↓
-roteiro.gerar_roteiro        gpt-5.6-luna escreve os 16 beats, as 16 legendas
+roteiro.gerar_roteiro        gpt-5.6-luna escreve os 8 beats, as 8 legendas
         ↓                    e o ritmo de cada foto
-config.montar_ritmo          o ritmo vira segundos, e os segundos viram quadros
+config.montar_ritmo          o ritmo vira quadros, e a soma vira a DURAÇÃO
 variacao.sortear_movimentos  o movimento de câmera, que depende dos dois
         ↓
-imagens.gerar_imagens        gpt-image-2 gera as 16 fotos ┐ em paralelo: as duas
+imagens.gerar_imagens        gpt-image-2 gera as 8 fotos  ┐ em paralelo: as duas
 musica.gerar_musica          ElevenLabs compõe a trilha   ┘ esperas são de rede
-        ↓
+        ↓                    do tamanho que o ritmo decidiu
 legendas.gerar_legendas      o .ass das caixas de story
         ↓
-video.montar_video           ffmpeg monta os 31s num passe só
+video.montar_video           ffmpeg monta o vídeo num passe só
         ↓
 youtube.publicar             sobe o Short
 ```
+
+A ordem entre `montar_ritmo` e `gerar_musica` **não é arbitrária**: é ela que
+permite o vídeo não ter duração fixa. A trilha só pode ser encomendada depois que
+o tamanho do laço existe, e o tamanho do laço é o que a história somou.
 
 ### O gato tem que ser o mesmo gato
 
@@ -181,7 +216,7 @@ lugar-comum.
 
 Então `variacao.py` sorteia, antes de qualquer chamada de API, o gancho da
 primeira foto, o tempo que faz hoje, a época do ano no bairro, o humor dele, a
-forma do rolê, um "tempero" que atravessa as 16 fotos, quem do elenco recorrente
+forma do rolê, um "tempero" que atravessa as 8 fotos, quem do elenco recorrente
 aparece, quantas fotos são selfie, a escala de plano de cada foto e o movimento
 de câmera de cada foto. Isso
 entra no prompt como **fato dado**, não como opção — dar a escolha de volta ao
@@ -195,25 +230,61 @@ de zoom seria três vezes mais rápida numa do que na outra — e velocidade de 
 `sortear_movimentos` (com uma corrente de sorteio própria, para partir o sorteio
 em dois não mudar o resto).
 
-O esqueleto nunca é sorteado: os 16 beats, a estética, a voz, o gato, o Black e
+O esqueleto nunca é sorteado: os 8 beats, a estética, a voz, o gato, o Black e
 a trilha. É a constância que faz o canal ser reconhecível; o sorteio mexe só no
 recheio.
 
 A semente é `data-hora` do run, então as quatro execuções do dia saem diferentes
 e um run é reproduzível — a semente vai no log.
 
+### Os arcos: o episódio pedido
+
+Tem uma coisa que não é sorteada nem fixa. Quando um espectador pede um episódio
+nos comentários, pedido de espectador não cabe numa tabela de sorteio: quem pediu
+quer ver *aquele* episódio, não uma chance em dez de ele sair algum dia.
+
+Um **arco** é um rolê escolhido a dedo, com um personagem que vem junto. Ele
+entra por `--arco <nome>` ou pela env var `ARCO` (que é como o cron do Render roda
+um episódio pedido: define a variável, deixa o run acontecer, tira a variável).
+Nome de arco inexistente derruba a execução na hora, antes de gastar imagem — um
+erro de digitação numa env var publicaria um dia comum no lugar do episódio que
+alguém está esperando.
+
+O arco substitui **duas** coisas do sorteio e só elas: a forma do rolê e o
+convidado do dia. Tempo, época, humor, tempero, gancho, âncoras e escala de plano
+continuam sorteados, e o sorteio roda inteiro antes de ser sobrescrito — assim a
+mesma semente dá o mesmo dia com e sem arco, e comparar os dois runs é possível.
+Um episódio especial ainda é um dia comum na vida dele, e é isso que impede o
+arco de virar outro canal.
+
+**`briga-1` — a briga com o Junin do Grau, parte 1.** O Junin é gato preto e
+branco, o moleque do grau: anda com a molecada das bikes, empina na descida e se
+acha o dono do pedaço. Ele fica *fora* do `ELENCO` sorteado de propósito — o
+elenco é de visitas simpáticas, e o Junin é o rival; se caísse no sorteio,
+apareceria numa noite de celebração sem que nada explicasse o que ele faz ali, e
+a treta queimaria numa aparição qualquer.
+
+Nos três beats do rolê: a primeira encarada, a provocação, e o impasse em cima do
+muro que **não se resolve**. Briga de gato é encarada — costas arqueadas, pelo em
+pé, rabo de escova, miado grave —, nunca sangue e nunca ferimento: a régua do
+canal continua sendo paz, prosperidade e coisas boas, e a única coisa feia na foto
+é o clima entre os dois. O "parte 1" vive no título e na descrição; a legenda tem
+proibição explícita de escrever "continua" ou "amanhã tem mais", porque o Short
+reinicia sozinho e um aviso desses é exatamente o que denuncia que ele acabou.
+
 ### A barra de stories
 
-Com 16 divisões ela também virou marcador de corte: cada foto acende uma divisão
-nova, então a fronteira entre duas fotos aparece no topo da tela mesmo quando as
-duas imagens têm enquadramento parecido.
+Ela também é marcador de corte: cada foto acende uma divisão nova, então a
+fronteira entre duas fotos aparece no topo da tela mesmo quando as duas imagens
+têm enquadramento parecido. Com 8 divisões em vez de 16 cada uma ficou o dobro de
+larga, e a virada de página ficou mais visível, não menos.
 
 As divisões são todas do **mesmo tamanho**, embora as fotos durem de 1s a 3,5s. É
-de propósito, e virou uma escolha bem maior do que era: a barra é a régua do
-formato (dezesseis fotos, sempre), não do tempo. Divisões proporcionais à duração
-denunciariam a foto longa antes de ela chegar — o espectador veria que vem coisa
-boa, e a surpresa é metade do efeito. O que muda de uma divisão para a outra é só
-a velocidade com que ela enche.
+de propósito, e é uma escolha bem maior do que era: a barra é a régua do formato
+(oito fotos, sempre), não do tempo. Divisões proporcionais à duração denunciariam
+a foto longa antes de ela chegar — o espectador veria que vem coisa boa, e a
+surpresa é metade do efeito. O que muda de uma divisão para a outra é só a
+velocidade com que ela enche.
 
 Ela fica **60px mais abaixo** e com margem lateral, e as duas coisas são a mesma
 ideia: colada no alto e quase encostando nas bordas, ela lia como um elemento do
@@ -231,9 +302,11 @@ que o preenchimento deixa de se ver pular; com um número fixo, o degrau da foto
 de 3,5s seria quase três vezes o da foto de 1,3s e só um dos dois seria
 imperceptível.
 
-São dezenas de degraus × 16 fotos, e o filtergraph passa de 30 mil caracteres —
+São dezenas de degraus por foto, e o filtergraph passa de 30 mil caracteres —
 mais do que cabe numa linha de comando do Windows. Por isso ele vai num arquivo,
-com `-filter_complex_script`.
+com `-filter_complex_script`. Com 8 fotos ele encolheu, mas não o bastante para
+essa decisão mudar: as fotos ficam mais tempo na tela, e mais tempo na tela são
+mais degraus por divisão.
 
 ### As legendas
 
@@ -272,13 +345,13 @@ prompt. Duas coisas voltam erradas, e as duas foram medidas montando o anel de
 áudio e tocando o resultado duas vezes seguidas:
 
 - **o andamento não fecha em compasso inteiro.** O prompt pede ~75 BPM e a faixa
-  veio a ~99; a 99 BPM o compasso dura 2,41s, e 31 segundos são 12,84 compassos.
-  Não 13. Aí o cruzamento não salva nada, ele só muda de lugar o estrago:
-  enquanto a volta toca, a batida vem certa, porque a volta é a continuação do
-  que estava tocando; quando ela se apaga e o corpo assume, a grade do corpo está
-  fora de fase e a batida tropeça. A medida que diz isso em um número: o laço
-  precisa ter um número inteiro de pulsos, e o do anel dava 51,35 — um terço de
-  pulso fora;
+  veio a ~99; a 99 BPM o compasso dura 2,41s, e os 31 segundos de então davam
+  12,84 compassos. Não 13. Aí o cruzamento não salva nada, ele só muda de lugar o
+  estrago: enquanto a volta toca, a batida vem certa, porque a volta é a
+  continuação do que estava tocando; quando ela se apaga e o corpo assume, a
+  grade do corpo está fora de fase e a batida tropeça. A medida que diz isso em
+  um número: o laço precisa ter um número inteiro de pulsos, e o do anel dava
+  51,35 — um terço de pulso fora;
 - **um segundo e meio de silêncio digital no fim**, abaixo de -55 dBFS. E é
   justamente o fim da trilha que é cruzado por cima do começo dela. Quando o
   silêncio cai no começo do cruzamento, a música afunda para 0,73x da energia
@@ -287,19 +360,30 @@ prompt. Duas coisas voltam erradas, e as duas foram medidas montando o anel de
 Como nenhuma das duas se resolve no prompt, a trilha é pedida **8 segundos mais
 longa** do que se vai usar, e `musica.py` faz o resto: acha as bordas reais do
 som, recorta do miolo da faixa (longe da introdução e da resolução) e estica o
-andamento com `atempo` o tanto que faltar para os 31s darem um número inteiro de
-compassos — 1,3% na faixa real, inaudível. O laço vai de 51,35 pulsos para
-52,01 — menos de um centésimo de pulso fora do inteiro.
+andamento com `atempo` o tanto que faltar para o laço dar um número inteiro de
+compassos. Com os 31s, isso era 1,3%; o laço ia de 51,35 pulsos para 52,01, menos
+de um centésimo de pulso fora do inteiro.
+
+**O vídeo mais curto tornou esse ajuste maior.** A sobra é sempre menos de meio
+compasso, mas ela é medida contra o laço inteiro: meio compasso em 31s é 4%, em
+14s é 9%, e num vídeo de 11s com um compasso de 4s chega a 18%. Por isso o teto
+`AJUSTE_MAXIMO` subiu de 0,08 para 0,20 — medido num vídeo de 10,8s, o ajuste
+pedido foi de 10,7%, e com o teto antigo ele teria sido descartado em silêncio e
+o laço tropeçaria a cada volta. Andamento diferente numa faixa que ninguém nunca
+ouviu não é audível como "rápido": não há original com que comparar e o `atempo`
+não mexe na afinação. O teto continua existindo porque nunca foi sobre fidelidade
+— ele é a rede contra **medição errada**, e esticar por um compasso errado é pior
+do que não esticar.
 
 O compasso é medido por autocorrelação do envelope de ataque, com a stdlib e
 nada mais, em dois passos: o primeiro acha o pulso com a precisão grosseira de um
-quadro de envelope, e o segundo procura o pico no múltiplo mais alto do pulso que
-ainda cabe na faixa e divide — o mesmo erro de medida, dividido por dezesseis.
-Isso importa porque a correção é de 1,3% e a medida grosseira erra 2%: sem o
-refinamento, estaria corrigindo com ruído.
+quadro de envelope, e o segundo procura o pico em múltiplos cada vez mais altos do
+pulso e divide — o mesmo erro de medida, dividido pelo múltiplo. Isso importa
+porque a medida grosseira erra 2%: sem o refinamento, estaria corrigindo com
+ruído.
 
 Errar o compasso por uma oitava quase não muda o resultado: o que se pede à
-unidade encontrada é caber um número inteiro de vezes em 31s, e um múltiplo do
+unidade encontrada é caber um número inteiro de vezes no laço, e um múltiplo do
 compasso cabe inteiro exatamente quando o compasso cabe.
 
 ### A trilha entra duas vezes, e não é desperdício
@@ -313,8 +397,8 @@ saber o formato.
 
 O motivo é que o `acrossfade` só emite depois de ler a primeira entrada inteira,
 e a primeira entrada é o *fim* do arquivo — para chegar lá, o `asplit` precisa
-empurrar 31s pelo outro ramo, que ninguém está consumindo. O 8.1.1 tolera o
-acúmulo; o 7.1 desiste.
+empurrar o laço inteiro pelo outro ramo, que ninguém está consumindo. O 8.1.1
+tolera o acúmulo; o 7.1 desiste.
 
 Por isso a trilha entra como duas entradas independentes e o cruzamento é feito
 com `amix`, que consome os dois ramos em paralelo, com `normalize=0` para ele
@@ -326,28 +410,30 @@ Se for mexer nisto, teste no ffmpeg da imagem, não no da sua máquina.
 
 **A curva do cruzamento é `qsin`, não a `tri` linear.** Ganho linear é o certo
 quando os dois lados são o mesmo som — a soma reconstrói o original. Mas os dois
-lados aqui são a mesma faixa em pontos diferentes dela, treze compassos de
+lados aqui são a mesma faixa em pontos diferentes dela, um laço inteiro de
 distância: dois sinais diferentes não somam amplitude, somam potência, e no meio
 do cruzamento (0,5 + 0,5) a potência cai pela metade. Medido no anel, a energia
 do cruzamento caía para 0,70x a do resto. Com `qsin` é a soma dos quadrados que
 dá 1, a potência fica constante, e a mesma medida dá 0,97x.
 
-**A faixa de áudio termina 1,4ms antes do vídeo.** O AAC codifica em blocos de
-1024 amostras e completa com zeros o bloco que sobrar: 31s a 44.100 Hz são
-1335,06 blocos, e os 964 zeros do bloco incompleto viravam 19ms de silêncio
-digital no fim do arquivo — exatamente entre a última amostra e a primeira, que é
-o único lugar onde ele não pode ficar. Isso só aparece decodificando o `.mp4`
-pronto: não está na trilha, nem no filtro, nem no log do ffmpeg.
+**A faixa de áudio termina alguns décimos de milissegundo antes do vídeo.** O AAC
+codifica em blocos de 1024 amostras e completa com zeros o bloco que sobrar: os
+31s de então, a 44.100 Hz, eram 1335,06 blocos, e os 964 zeros do bloco
+incompleto viravam 19ms de silêncio digital no fim do arquivo — exatamente entre
+a última amostra e a primeira, que é o único lugar onde ele não pode ficar. Isso
+só aparece decodificando o `.mp4` pronto: não está na trilha, nem no filtro, nem
+no log do ffmpeg.
 
 Não dá para alinhar as três coisas: uma duração múltipla de 1/30 de segundo *e*
-de 1024/44100 tem que ser múltipla de 17,067s, e 31 não é. Então o vídeo fica com
-os 31s cravados e o áudio é encurtado até o bloco fechado anterior. Encurtar, e
-não esticar até o bloco seguinte: esticando, o áudio fica mais longo que o vídeo,
-o `-frames:v` encerra a saída no último quadro de imagem e apara a faixa de volta
-para um tamanho que não é nenhum dos dois. Ficando abaixo, o que sai é exatamente
-o que está escrito no `config.py`.
+de 1024/44100 teria que ser múltipla de 17,067s, e a duração do vídeo é a que a
+história somar. Então o vídeo fica com a duração que tem e o áudio é encurtado até
+o bloco fechado anterior. Encurtar, e não esticar até o bloco seguinte:
+esticando, o áudio fica mais longo que o vídeo, o `-frames:v` encerra a saída no
+último quadro de imagem e apara a faixa de volta para um tamanho que não é nenhum
+dos dois. Ficando abaixo, o que sai é exatamente o que está escrito no
+`config.py`.
 
-`DUR_AUDIO`, e não `DUR_TOTAL`, é a duração real do laço — é a ela que
+`Ritmo.audio`, e não `Ritmo.total`, é a duração real do laço — é a ela que
 `musica.py` alinha os compassos.
 
 ## Rodando
@@ -359,6 +445,7 @@ cp .env.example .env      # preencha as chaves
 python main.py --auth-youtube   # uma vez: autoriza o canal no YouTube
 python main.py --sem-publicar   # gera e para, para conferir o arquivo
 python main.py                  # gera e publica
+python main.py --arco briga-1   # um episódio pedido, em vez do rolê sorteado
 ```
 
 Precisa de `ffmpeg` no PATH (o `Dockerfile` já instala).
@@ -376,6 +463,7 @@ da API) e os logs do serviço.
 | `ELEVENLABS_API_KEY` | trilha instrumental (`POST /v1/music`) |
 | `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` | credencial OAuth do projeto no Google Cloud |
 | `YOUTUBE_REFRESH_TOKEN` | o canal autorizado; preenchido por `--auth-youtube` |
+| `ARCO` | opcional: roda um episódio pedido (hoje só `briga-1`). Mesma coisa que `--arco`, e é como o cron do Render publica um. Tire depois do run. |
 
 O resto tem padrão e está listado em `.env.example`.
 

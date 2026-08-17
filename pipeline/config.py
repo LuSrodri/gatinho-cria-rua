@@ -33,51 +33,77 @@ def atualizar_env(chave: str, valor: str) -> None:
 
 # ---- Formato do Short --------------------------------------------------------
 
-# 16 fotos em 31s. A PRIMEIRA dura sempre 1s; as outras quinze duram entre 1,3s
-# e 3,5s, e quem decide qual dura quanto é a HISTÓRIA daquele dia (o roteirista
-# devolve um peso por cena, ver roteiro.py, e `montar_ritmo` transforma esses
-# pesos em segundos).
+# 8 fotos. A PRIMEIRA dura sempre 1s; as outras sete duram entre 1,3s e 3,5s, e
+# quem decide qual dura quanto é a HISTÓRIA daquele dia (o roteirista devolve um
+# ritmo por cena, ver roteiro.py, e `montar_ritmo` transforma esses ritmos em
+# quadros).
 #
-# Antes eram 2s cravados para todas. O problema de 2s cravados não é a duração,
-# é a REGULARIDADE: um corte exatamente a cada dois segundos, dezesseis vezes,
-# vira metrônomo — o olho aprende o intervalo em três fotos e passa a esperar o
-# próximo corte em vez de olhar a foto. Ritmo irregular é o oposto disso: a foto
-# que carrega a piada do rolê fica na tela o tempo de a piada acontecer, e as
-# fotos de passagem passam mesmo. O corte volta a ser pontuação em vez de
-# batida.
+# Eram 16, e antes disso 8. A volta para 8 não é desfazer a ida para 16: o que
+# foi para 16 e ficou foi o RITMO VARIÁVEL, e é ele que faz oito fotos não serem
+# as oito de antes. Com 4s cravados cada, oito fotos eram oito paradas iguais;
+# com 1,3s a 3,5s decididos pela história, são oito fotos em que a que carrega o
+# momento fica quase três vezes mais que a de passagem.
+#
+# O problema de duração cravada nunca foi a duração, foi a REGULARIDADE: um
+# corte exatamente no mesmo intervalo, foto após foto, vira metrônomo — o olho
+# aprende o intervalo em três fotos e passa a esperar o próximo corte em vez de
+# olhar a foto. Ritmo irregular é o oposto disso: o corte volta a ser pontuação
+# em vez de batida.
 #
 # A PRIMEIRA em 1s por causa do loop. O Short reinicia sozinho, então o corte
 # mais importante do vídeo é o do último quadro para o primeiro — e é o único
 # que o espectador vê duas vezes. Uma abertura curta atravessa depressa o
 # território já conhecido e devolve o vídeo ao movimento antes de dar tempo de
 # reconhecer que ele recomeçou.
-TOTAL_IMAGENS = 16
+TOTAL_IMAGENS = 8
 DUR_PRIMEIRA = 1.0
 DUR_MINIMA = 1.3
 DUR_MAXIMA = 3.5
 
-# O total é FIXO em 31s, mesmo com as fotos variando. Não é teimosia com o
-# número: o orçamento fechado é o que mantém o resto do pipeline determinístico
-# — a trilha é encomendada com este tamanho antes de o vídeo existir, e o loop
-# de áudio depende de saber a duração exata de antemão. O que a história decide
-# é como repartir os 31s, não quantos são.
-DUR_TOTAL = 31.0
+# O total NÃO é fixo. Era 31s cravados, e o orçamento fechado existia por um
+# motivo de encanamento, não de edição: a trilha é encomendada com o tamanho do
+# vídeo, e quem encomendava precisava saber esse tamanho antes de o vídeo
+# existir. Isso deixou de ser verdade quando o ritmo passou a ser montado ENTRE
+# o roteiro e a montagem (ver main.py) — no instante em que a trilha é pedida, as
+# durações das oito fotos já estão decididas, e o tamanho do laço vai junto no
+# pedido.
+#
+# Com o orçamento fechado, a história dizia só a PROPORÇÃO e o relógio dizia o
+# resto: o dia de fotos rápidas era esticado até encher os 31s e o dia de fotos
+# que pediam tempo era espremido até caber neles. Agora a história diz as duas
+# coisas — o dia corrido fecha curto e o dia que respira fecha longo, e os dois
+# estão certos.
+#
+# Os limites são de construção, não de configuração: 1s da primeira mais sete
+# fotos entre 1,3s e 3,5s dão de 10,1s a 25,5s. Na distribuição comum (algumas
+# corridas, várias normais, uma ou duas longas) o vídeo fecha perto de 16s.
+#
+# Quem precisa da duração lê `Ritmo.total`, e não uma constante: ela só existe
+# depois que o roteiro do dia existe.
 
-# Sobreposição da volta do loop, em segundos. A trilha é entregue com DUR_AUDIO +
-# CAUDA_LOOP de duração, e os últimos CAUDA_LOOP segundos são cruzados por cima
-# do começo dela (ver o filtro de áudio em video.py). O resultado é que o
-# instante seguinte ao último quadro já é o primeiro, sem emenda audível — e sem
-# o fade de saída, que era o aviso mais claro de que o vídeo ia acabar.
+# Sobreposição da volta do loop, em segundos. A trilha é entregue com
+# `Ritmo.audio` + CAUDA_LOOP de duração, e os últimos CAUDA_LOOP segundos são
+# cruzados por cima do começo dela (ver o filtro de áudio em video.py). O
+# resultado é que o instante seguinte ao último quadro já é o primeiro, sem
+# emenda audível — e sem o fade de saída, que era o aviso mais claro de que o
+# vídeo ia acabar.
+#
+# Continuam sendo 2s com o vídeo mais curto. Eles são uma fração maior do total
+# (2 de 16 em vez de 2 de 31), mas o cruzamento não é medido contra o vídeo: é
+# medido contra o compasso, e o que ele precisa é durar mais de um compasso para
+# a passagem acontecer dentro da música em vez de em cima de uma batida só.
 CAUDA_LOOP = 2.0
 
-# A faixa de áudio termina 1,4ms ANTES do vídeo, e isso é de propósito.
+# A faixa de áudio termina alguns décimos de milissegundo ANTES do vídeo, e isso
+# é de propósito.
 #
 # O AAC codifica em blocos de 1024 amostras e não sabe fazer bloco pela metade:
 # uma faixa que não termina em bloco cheio é completada com ZEROS pelo encoder.
-# Com 31s a 44.100 Hz dá 1.367.100 amostras, que são 1335,06 blocos — e os 964
-# zeros do bloco que faltava viram 19ms de silêncio digital no fim do arquivo.
-# Isso foi medido no .mp4 pronto, decodificando o áudio de volta; não aparece em
-# lugar nenhum antes disso, nem na trilha, nem no filtro, nem no log do ffmpeg.
+# Com os 31s de antes, a 44.100 Hz, davam 1.367.100 amostras, que são 1335,06
+# blocos — e os 964 zeros do bloco que faltava viravam 19ms de silêncio digital
+# no fim do arquivo. Isso foi medido no .mp4 pronto, decodificando o áudio de
+# volta; não aparece em lugar nenhum antes disso, nem na trilha, nem no filtro,
+# nem no log do ffmpeg.
 #
 # Dezenove milissegundos parecem nada, mas caem no ÚNICO lugar do vídeo onde não
 # podem cair: o Short reinicia sozinho, então esse silêncio fica exatamente entre
@@ -85,9 +111,10 @@ CAUDA_LOOP = 2.0
 # projeto existe para esconder.
 #
 # Não dá para alinhar as três coisas ao mesmo tempo: uma duração múltipla de 1/30
-# de segundo E de 1024/44100 tem que ser múltipla de 17,067s, e 31 não é. Então o
-# vídeo fica com os 31s cravados e o ÁUDIO é encurtado até o bloco fechado
-# anterior — 62 amostras a menos, 1,4ms, menos que um ciclo de um som grave.
+# de segundo E de 1024/44100 teria que ser múltipla de 17,067s, e a duração do
+# vídeo agora é a que a história somar. Então o vídeo fica com a duração que ele
+# tem e o ÁUDIO é encurtado até o bloco fechado anterior — no máximo 1023
+# amostras a menos, 23ms no pior caso, e normalmente uma fração disso.
 #
 # Encurtar, e não esticar até o bloco seguinte. Esticar também acaba com o
 # silêncio, mas deixa o áudio mais longo que o vídeo, e aí o `-frames:v` encerra
@@ -96,13 +123,11 @@ CAUDA_LOOP = 2.0
 # Ficando abaixo do vídeo, o áudio nunca é a faixa que manda, e o que sai é
 # exatamente o que está escrito aqui.
 #
-# DUR_AUDIO, e não DUR_TOTAL, é a duração real do laço de áudio: é ela que a
-# trilha repete quando o Short recomeça, e é a ela que musica.py alinha os
+# `Ritmo.audio`, e não `Ritmo.total`, é a duração real do laço de áudio: é ela
+# que a trilha repete quando o Short recomeça, e é a ela que musica.py alinha os
 # compassos.
 TAXA_AUDIO = 44100
 BLOCO_AAC = 1024
-AMOSTRAS_LOOP = round(DUR_TOTAL * TAXA_AUDIO) // BLOCO_AAC * BLOCO_AAC
-DUR_AUDIO = AMOSTRAS_LOOP / TAXA_AUDIO
 
 
 @dataclass(frozen=True)
@@ -125,109 +150,82 @@ class Ritmo:
     def resumo(self) -> str:
         return " ".join(f"{d:.2f}" for d in self.duracoes)
 
+    @property
+    def audio(self) -> float:
+        """A duração do laço de áudio: o vídeo aparado até fechar um bloco do AAC.
 
-def _repartir(pretendidas: list[float], orcamento: float) -> list[float]:
-    """Encaixa as durações pretendidas em ``orcamento`` segundos, dentro dos limites.
-
-    O roteirista não devolve segundos, devolve o ritmo de cada cena; roteiro.py
-    traduz cada ritmo para a duração PRETENDIDA dele (1,4s para uma passagem,
-    3,4s para o momento da história). Se a distribuição do dia for a esperada,
-    essas durações já somam mais ou menos os 30s disponíveis e cada foto fica com
-    o tempo que pediu. Quando não somam — o dia em que o modelo marca metade das
-    cenas como longas —, todas são multiplicadas pelo mesmo fator até caberem.
-
-    Achar esse fator é o problema inteiro, porque a soma depois do corte nos
-    limites não é proporcional ao fator: passado certo ponto, esticar mais não
-    aumenta nada, porque quem cresceria já bateu no teto. Mas a soma É monótona
-    no fator, e vai de ``n * DUR_MINIMA`` (fator perto de zero) a
-    ``n * DUR_MAXIMA`` (fator enorme) — e o orçamento está garantidamente entre
-    os dois (com 15 fotos e 30s: entre 19,5s e 52,5s). Então existe um fator que
-    acerta a soma na mosca, e bisseção o encontra em oitenta iterações de uma
-    linha cada.
-
-    A alternativa óbvia — repartir proporcionalmente e ir congelando quem estoura
-    — foi o que estava aqui antes, e ela tem um caso em que devolve uma soma
-    errada em silêncio: se numa rodada uns estouram o teto e outros furam o piso,
-    a lista inteira é congelada de uma vez e o que sobrou do orçamento não vai
-    para lugar nenhum. Com um peso muito maior que os outros, isso dava 22,7s de
-    fotos para 31s de áudio.
-    """
-    if not pretendidas:
-        return []
-    # Duração pretendida ausente, zerada ou negativa não deve engolir o vídeo nem
-    # sumir dele: sem informação, vale a média das outras.
-    validas = [v for v in pretendidas if v > 0]
-    media = sum(validas) / len(validas) if validas else 1.0
-    pretendidas = [v if v > 0 else media for v in pretendidas]
-
-    def soma(fator: float) -> float:
-        return sum(min(max(v * fator, DUR_MINIMA), DUR_MAXIMA) for v in pretendidas)
-
-    baixo, alto = 1e-6, 1e6
-    for _ in range(80):
-        meio = (baixo + alto) / 2
-        if soma(meio) < orcamento:
-            baixo = meio
-        else:
-            alto = meio
-    fator = (baixo + alto) / 2
-    return [min(max(v * fator, DUR_MINIMA), DUR_MAXIMA) for v in pretendidas]
+        Está aqui, e não numa constante, porque o vídeo deixou de ter duração
+        fixa: o laço só é conhecido depois que a história decide os cortes. É
+        este número que musica.py encomenda e ao qual alinha os compassos, e é
+        ele que video.py usa para montar o anel — o `total` é a duração do
+        VÍDEO, e usar um no lugar do outro devolve o silêncio de fim de bloco
+        exatamente na volta do loop.
+        """
+        return round(self.total * TAXA_AUDIO) // BLOCO_AAC * BLOCO_AAC / TAXA_AUDIO
 
 
 def montar_ritmo(pretendidas: list[float], fps: int) -> Ritmo:
-    """Converte as durações pretendidas pelo roteiro em durações somando DUR_TOTAL.
+    """Converte as durações pretendidas pelo roteiro em quadros inteiros.
 
-    As durações são arredondadas para QUADRO INTEIRO, e não para um decimal
-    bonito. O ffmpeg monta cada foto com `round(duracao * fps)` quadros, então
-    uma duração que não cai em quadro cheio vira erro de arredondamento — e como
-    os instantes de entrada são acumulados, esse erro SOMA: dezesseis fotos com
-    meio quadro de sobra cada põem a legenda e a barra de stories quase um terço
-    de segundo à frente da imagem no fim do vídeo. Quantizando aqui, o tempo do
-    filtro e o tempo do arquivo .ass são o mesmo tempo por construção.
+    O roteirista não devolve segundos, devolve o ritmo de cada cena; roteiro.py
+    traduz cada ritmo para a duração PRETENDIDA dele (1,4s para uma passagem,
+    3,4s para o momento da história). Aqui cada cena recebe o que pediu, aparado
+    nos limites — e a soma disso é a duração do vídeo.
+
+    Este passo já foi bem maior. Com o total fixo em 31s, a duração pretendida
+    era só uma proporção: existia uma bisseção que procurava o fator pelo qual
+    multiplicar todas as cenas para a soma cair exatamente no orçamento, e
+    depois uma rodada que devolvia às fotos mais longas os quadros perdidos no
+    arredondamento. Nada disso tem função quando não há orçamento: o que a cena
+    pediu é o que ela leva, e o vídeo dura o que der.
+
+    O que sobreviveu é o ARREDONDAMENTO, e ele é feito em QUADRO INTEIRO, não
+    num decimal bonito. O ffmpeg monta cada foto com `round(duracao * fps)`
+    quadros, então uma duração que não cai em quadro cheio vira erro de
+    arredondamento — e como os instantes de entrada são acumulados, esse erro
+    SOMA e põe a legenda e a barra de stories à frente da imagem no fim do
+    vídeo. Quantizando aqui, e derivando `inicios` e `total` da mesma contagem
+    de quadros, o tempo do filtro e o tempo do arquivo .ass são o mesmo tempo por
+    construção.
+
+    Os limites também são convertidos para quadros, e isso não é preciosismo: a
+    24 fps, `round(1,3 * 24)` são 31 quadros, que valem 1,29s — o arredondamento
+    sozinho já sairia por baixo do piso.
+
+    Duração pretendida ausente, zerada ou negativa cai no piso em vez de derrubar
+    a execução: sem orçamento para repartir, o piso é o palpite certo para uma
+    cena sobre a qual não se sabe nada.
     """
-    duracoes = _repartir(pretendidas[1:], DUR_TOTAL - DUR_PRIMEIRA)
-
-    # Daqui para baixo a conta é toda em QUADROS, e os limites também. Converter
-    # os limites junto não é preciosismo: a 24 fps, `round(1,3 * 24)` são 31
-    # quadros, que valem 1,29s — o arredondamento sozinho já sairia por baixo do
-    # piso que a repartição tinha respeitado.
     q_minimo = math.ceil(DUR_MINIMA * fps)
     q_maximo = math.floor(DUR_MAXIMA * fps)
     quadros = [round(DUR_PRIMEIRA * fps)] + [
-        min(max(round(d * fps), q_minimo), q_maximo) for d in duracoes
+        min(max(round(d * fps), q_minimo), q_maximo) for d in pretendidas[1:]
     ]
 
-    # Os quadros perdidos (ou ganhos) no arredondamento são devolvidos um a um
-    # às fotos mais longas, que é onde um quadro a mais ou a menos não se vê. A
-    # primeira foto fica de fora: 1s cravado é o que faz a abertura do loop
-    # funcionar. A rodada que não consegue mexer em nada encerra o ajuste —
-    # acontece se todas as fotos já estiverem no limite, e aí não há o que fazer.
-    sobra = round(DUR_TOTAL * fps) - sum(quadros)
-    passo = 1 if sobra > 0 else -1
-    ajustaveis = sorted(range(1, len(quadros)), key=lambda i: -quadros[i])
-    while sobra:
-        andou = False
-        for alvo in ajustaveis:
-            if not sobra:
-                break
-            if q_minimo <= quadros[alvo] + passo <= q_maximo:
-                quadros[alvo] += passo
-                sobra -= passo
-                andou = True
-        if not andou:
-            break
-
     duracoes = [q / fps for q in quadros]
-    inicios = [sum(duracoes[:i]) for i in range(len(duracoes))]
-    return Ritmo(duracoes, inicios, sum(duracoes))
+    inicios = [sum(quadros[:i]) / fps for i in range(len(quadros))]
+    return Ritmo(duracoes, inicios, sum(quadros) / fps)
 
 
 
-# Os 16 momentos do dia dele, na ordem. A rotina é FIXA de propósito — é o que
+# Os 8 momentos do dia dele, na ordem. A rotina é FIXA de propósito — é o que
 # faz o canal ter formato reconhecível: o espectador sabe que começa no fim da
-# tarde e termina no busão. O que muda todo dia são os quatro beats do rolê
-# (índices 7 a 10), onde o roteirista tem liberdade total, e o recheio dos
+# tarde e termina no busão. O que muda todo dia são os três beats do rolê
+# (índices 3 a 5), onde o roteirista tem liberdade total, e o recheio dos
 # âncoras, que é sorteado em variacao.py.
+#
+# Encolher de 16 para 8 foi encolher a ROTINA, não o rolê. Os beats que sumiram
+# são os de passagem — espreguiçar, o portão, o encontro em si, o ponto de
+# ônibus vazio —, cada um deles uma foto que só levava de um lugar ao outro. O
+# rolê perdeu um dos quatro e ficou com três, que é o que uma história com
+# começo, meio e fim precisa. Com metade das fotos, cada beat que ficou tem que
+# carregar mais de um momento: o café é também o acordar de vez, a madrugada é
+# também a volta, o busão é também o nascer do sol.
+#
+# A luz continua sendo o relógio do vídeo, e com 8 fotos ela anda mais depressa:
+# fim de tarde, anoitecer, noite, madrugada, nascer do sol em oito passos em vez
+# de dezesseis. Cada beat tem que ser inconfundível do anterior (ver ESTETICA em
+# roteiro.py).
 #
 # O último beat e o primeiro são vizinhos, não pontas: ele pega o busão para a
 # escola e a foto seguinte é a de acordar. É o mesmo ciclo recomeçando, e é o
@@ -244,26 +242,34 @@ BEATS = [
         "a posição, o lugar ou o estado em que ele está é a graça da foto, e ela "
         "tem que ser entendida em um segundo, sem legenda explicando.",
     ),
-    ("espreguicar", "Ainda mole, no lugar onde acordou, olhando a rua no fim da tarde."),
-    ("cafe", "O café dele, na laje ou na janela, com o pôr do sol na cidade ao fundo."),
-    ("portao", "Ele saindo de casa, o portão e a calçada banhados de sol baixo."),
-    ("chamar_black", "Ele vai chamar o Black, o amigo gato preto simpático, na rua."),
-    ("encontro", "O Black aparece: os dois juntos, o céu já virando anoitecer."),
-    ("rua", "Os dois pela rua enquanto as primeiras luzes do bairro acendem."),
+    (
+        "cafe",
+        "Ainda meio dentro da situação em que acordou, mole, com o café dele na "
+        "laje ou na janela e o sol baixo na cidade ao fundo.",
+    ),
+    (
+        "chamar_black",
+        "Ele chama o Black, o amigo gato preto simpático, e os dois saem juntos "
+        "pela rua — o céu virando anoitecer, as primeiras luzes acendendo.",
+    ),
     ("role_1", "Primeiro momento do rolê da noite: eles chegam no lugar."),
-    ("role_2", "Segundo momento do rolê — a coisa acontecendo."),
-    ("role_3", "Terceiro momento do rolê: o auge da noite."),
-    ("role_4", "Quarto momento do rolê, o desfecho do que aconteceu."),
-    ("madrugada", "Madrugada alta, o clima baixando, a rua vazia e quieta."),
-    ("volta", "Os dois voltando a pé, o céu começando a clarear no fundo."),
-    ("nascer_do_sol", "O nascer do sol pegando os dois, fim da noite."),
-    ("ponto", "O ponto de ônibus, ele esperando com a luz nova da manhã."),
-    ("busao", "Ele pegando o busão para a escola, sem ter dormido."),
+    ("role_2", "Segundo momento do rolê — a coisa acontecendo, o auge da noite."),
+    ("role_3", "Terceiro momento do rolê, o desfecho do que aconteceu."),
+    (
+        "madrugada",
+        "Madrugada alta: os dois voltando a pé pela rua vazia e quieta, o céu "
+        "começando a clarear no fundo.",
+    ),
+    (
+        "busao",
+        "Nascer do sol no ponto: ele pegando o busão para a escola, sem ter "
+        "dormido, com a luz nova da manhã.",
+    ),
 ]
 
-# Índices dos quatro beats do rolê — o único trecho em que o roteirista inventa
-# o lugar e o acontecimento. Roteiro e prompt de imagem leem daqui.
-BEATS_ROLE = (7, 8, 9, 10)
+# Índices dos três beats do rolê — o único trecho em que o roteirista inventa o
+# lugar e o acontecimento. Roteiro e prompt de imagem leem daqui.
+BEATS_ROLE = (3, 4, 5)
 
 
 @dataclass

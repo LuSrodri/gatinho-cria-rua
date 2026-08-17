@@ -17,10 +17,10 @@ propósito:
   de imagem entende inglês muito melhor, e o texto nunca aparece na tela.
 - ``legenda``: o texto em PORTUGUÊS que vai queimado no vídeo, escrito na voz
   dele — story de Instagram, primeira pessoa, curto.
-- ``ritmo``: quanto tempo a foto pede na tela. É a única decisão do roteirista
-  que sai do conteúdo e entra na MONTAGEM — a duração de cada corte deixou de
-  ser fixa e passou a ser contada pela história (ver `montar_ritmo` em
-  config.py).
+- ``ritmo``: quanto tempo a foto fica na tela. É a única decisão do roteirista
+  que sai do conteúdo e entra na MONTAGEM, e ela cresceu: além de decidir cada
+  corte, a soma dos oito ritmos é agora a DURAÇÃO DO VÍDEO, que deixou de ser
+  fixa em 31s (ver `montar_ritmo` em config.py).
 
 O que ele NÃO escolhe é a escala de plano: ela é sorteada em variacao.py, com a
 regra de nunca repetir a família de um corte para o outro, e chega aqui como
@@ -59,17 +59,16 @@ TENTATIVAS = 3
 # Encurtar a frase é o que deixa a fonte crescer de verdade.
 MAX_LEGENDA = 36
 
-# Quantos segundos cada ritmo PRETENDE ficar na tela. O roteirista devolve o
-# nome do ritmo — é o que um modelo cumpre com precisão, enquanto pedir segundos
-# devolve números que não somam nada —, e `config.montar_ritmo` encaixa estas
-# durações nos 30s disponíveis.
+# Quantos segundos cada ritmo dura na tela. O roteirista devolve o NOME do ritmo
+# — é o que um modelo cumpre com precisão, enquanto pedir segundos devolve
+# números que não somam nada — e `config.montar_ritmo` converte para quadros.
 #
-# São durações, e não pesos abstratos, porque a média delas é o que decide o
-# resultado. Com pesos proporcionais, marcar uma cena como longa num vídeo com
-# muitas outras longas a encurtava; com durações pretendidas, uma distribuição
-# comum (algumas corridas, várias normais, uma ou duas longas) dá em média perto
-# de 2s por foto, o fator de encaixe fica perto de 1 e cada cena recebe
-# exatamente o tempo que pediu. O ajuste só aparece quando o dia sai da média.
+# Estes números deixaram de ser uma pretensão e passaram a ser a duração de
+# verdade quando o total do vídeo parou de ser fixo: não há mais orçamento para
+# encaixar, então o que a cena pede é o que ela leva, e a soma é o tamanho do
+# Short. Continuam sendo durações, e não pesos abstratos, porque agora a média
+# delas é literalmente o comprimento do vídeo: oito fotos nesta tabela dão de 11s
+# (tudo corrida) a 24s (tudo longa), e uns 16s na distribuição comum.
 #
 # A distância entre "corrida" e "longa" é grande de propósito: se marcar uma cena
 # como longa a alonga em meio segundo, ninguém vê diferença nenhuma e o vídeo
@@ -135,8 +134,9 @@ ESQUEMA = {
                     "properties": {
                         # `enum`, e não string livre. O modo estrito da OpenAI não
                         # aceita `minItems`/`maxItems`, então a QUANTIDADE de cenas
-                        # não é exigível pelo schema — e um run de 16 beats já
-                        # voltou com 17 cenas, abortando a execução. O que dá para
+                        # não é exigível pelo schema — e na época dos dezesseis
+                        # beats um run voltou com 17 cenas, abortando a
+                        # execução. O que dá para
                         # exigir é o NOME de cada beat; com ele fechado, a lista
                         # vira reconciliável por nome em `_alinhar`, e a contagem
                         # deixa de importar.
@@ -206,8 +206,8 @@ Gato preto, pelo curto e brilhante, olhos amarelos. Amigo dele. Simpático,
 falante, sempre negociando alguma coisa com alguém. É o extrovertido da dupla.
 
 O CELULAR
-Todas as 16 imagens são fotos que ELE tirou com o celular e postou no story. Ou é
-selfie (pata esticada, ângulo de baixo, meio torto, lente meio distorcida na
+Todas as fotos do story foram tiradas por ELE com o celular. Ou é selfie (pata
+esticada, ângulo de baixo, meio torto, lente meio distorcida na
 borda), ou é foto que ele tirou de OUTROS gatos — e essa é a parte que ele mais
 gosta de compartilhar: dois gatos dividindo comida, o Black tentando negociar
 alguma coisa com um gato desconhecido, um casal de gatos juntos num muro florido,
@@ -261,19 +261,24 @@ Nunca miséria, nunca entulho, nunca tijolo cru, nunca lixo, nunca favela
 estereotipada de filme. A sensação de toda foto tem que ser paz, fartura e
 pertencimento.
 
-A luz é o personagem principal, e ela ANDA ao longo dos 16 beats — é o relógio
-do vídeo. Cada faixa tem que ser inconfundível da anterior:
+A luz é o personagem principal, e ela ANDA ao longo dos 8 beats — é o relógio do
+vídeo. São oito fotos para atravessar a tarde inteira até o dia seguinte, então
+cada beat pula uma hora de verdade e tem que ser INCONFUNDÍVEL do anterior. Duas
+fotos com a mesma luz, aqui, param o relógio:
 
-- beats 1 a 4: fim de tarde, sol baixo e dourado atravessando as folhas, sombras
+- beat 1: fim de tarde, sol baixo e dourado atravessando as folhas, sombras
   compridas, tudo cor de mel;
-- beats 5 a 7: o anoitecer acontecendo, céu azul-violeta com um resto de laranja
-  no horizonte, as primeiras luzes de poste e de janela acendendo;
-- beats 8 a 11: noite quente e cheia, luz de poste âmbar, brilho da padaria,
-  luzinha de varal, refletor de quadra, o céu já preto-azulado;
-- beats 12 e 13: madrugada alta, luz fria e escassa, rua vazia, orvalho
-  começando, o primeiro clarão cinza-azulado no fundo do céu;
-- beats 14 a 16: nascer do sol, azul frio virando rosa e dourado, ar limpo,
-  vapor subindo do asfalto, luz nova e horizontal.
+- beat 2: o mesmo fim de tarde já mais baixo, o sol raspando os telhados, a luz
+  ficando laranja e a sombra tomando a rua;
+- beat 3: o anoitecer acontecendo, céu azul-violeta com um resto de laranja no
+  horizonte, as primeiras luzes de poste e de janela acendendo;
+- beats 4 a 6: noite quente e cheia, luz de poste âmbar, brilho da padaria,
+  luzinha de varal, refletor de quadra, o céu já preto-azulado. Dentro do rolê a
+  noite também anda: o beat 6 é mais tarde e mais quieto que o beat 4;
+- beat 7: madrugada alta, luz fria e escassa, rua vazia, orvalho começando, o
+  primeiro clarão cinza-azulado no fundo do céu;
+- beat 8: nascer do sol, azul frio virando rosa e dourado, ar limpo, vapor
+  subindo do asfalto, luz nova e horizontal.
 
 Escreva "cena" em inglês, como quem descreve uma foto de celular: quem está no
 quadro, fazendo o quê, onde, e como está a luz. Nunca peça texto, letras, placas
@@ -285,7 +290,13 @@ RITMO = f"""\
 O RITMO (campo "ritmo" de cada cena)
 O vídeo não corta em intervalo fixo: cada foto fica na tela o tempo que a
 história pede, entre 1,3 e 3,5 segundos. Você decide isso cena a cena, e é o que
-transforma dezesseis fotos numa narrativa em vez de uma sequência.
+transforma oito fotos numa narrativa em vez de uma sequência.
+
+A SOMA DO QUE VOCÊ ESCOLHER É A DURAÇÃO DO VÍDEO. Não existe tempo total a
+respeitar: o dia de fotos rápidas fecha em uns doze segundos e o dia que respira
+passa de vinte, e os dois são vídeos válidos. O que não é válido é marcar tudo
+como "longa" achando que tempo de tela é importância — oito fotos longas não dão
+um vídeo importante, dão um vídeo lento.
 
 - "corrida": foto de passagem. O olho pega de relance e segue. Deslocamento,
   caminho, chegada — o que só existe para levar de um lugar ao outro.
@@ -293,10 +304,11 @@ transforma dezesseis fotos numa narrativa em vez de uma sequência.
 - "demorada": tem detalhe para ver, ou a legenda muda alguma coisa. O espectador
   precisa de um instante a mais.
 - "longa": é O momento. O que aconteceu de melhor no rolê, a foto que ele
-  postaria com orgulho, o nascer do sol. Uma ou duas no vídeo inteiro, nunca
-  mais que três — se tudo é longo, nada é.
+  postaria com orgulho, o nascer do sol. UMA no vídeo, no máximo duas — em oito
+  fotos, a terceira "longa" já é um terço do vídeo parado, e se tudo é longo,
+  nada é.
 
-Alterne. Duas ou três "corrida" seguidas antes de uma "demorada" é o que faz a
+Alterne. Duas "corrida" seguidas antes de uma "demorada" é o que faz a
 "demorada" pesar. Uma sequência inteira de "normal" devolve o metrônomo que
 estamos tentando tirar. Distribua o peso pela história: o rolê é onde estão as
 longas, a rotina é onde estão as corridas.
@@ -331,7 +343,7 @@ a cara de pau ou o constrangimento de quem foi pego. Nada de "acordei" e nada de
 essa foto tem.
 
 O beat 2 continua de dentro dessa mesma situação: ele ainda está ali, saindo dela
-devagar. Depois disso o dia segue normal.
+devagar, já com o café. Depois disso o dia segue normal.
 """
 
 
@@ -393,10 +405,10 @@ def _contexto_dia(var: Variacao) -> str:
     return f"""\
 O DIA DE HOJE (não é sugestão: é o que está dado. Escreva EM CIMA disto.)
 
-O tempo: {var.clima}. Vale para as 16 fotos — é um dia só.
+O tempo: {var.clima}. Vale para as {len(BEATS)} fotos — é um dia só.
 A época do ano no bairro: {var.calendario}.
 O humor dele hoje: {var.humor}.
-O tempero do dia, o fio que atravessa as 16 fotos: {var.tempero}.
+O tempero do dia, o fio que atravessa as {len(BEATS)} fotos: {var.tempero}.
 Quem do bairro aparece hoje: {visita}
 A forma do rolê (beats {_numerar(BEATS_ROLE)}): {var.forma}.
 
@@ -425,6 +437,10 @@ def _prompt(var: Variacao, recentes: list[dict]) -> str:
     )
     selfies = len(BEATS) - var.quantas_outros
     forcadas = var.indices_so_outros()
+    # O arco, quando existe, entra logo depois das instruções do rolê: ele
+    # substitui a forma sorteada, e uma instrução que substitui outra precisa vir
+    # perto do que está substituindo para o modelo não escrever as duas.
+    arco = f"\n{var.arco.instrucao}\n" if var.arco else ""
     return f"""\
 Escreva o dia de hoje ({agora.strftime('%d/%m/%Y')}, {agora.strftime('%A')}) do
 canal. São {len(BEATS)} fotos, exatamente uma por beat, na ordem abaixo.
@@ -450,8 +466,9 @@ Os beats {_numerar(BEATS_ANCORA)} são âncoras: a FUNÇÃO deles não muda, mas
 detalhe sim, e o detalhe de hoje já está definido abaixo.
 
 Os beats {_numerar(BEATS_ROLE)} são o rolê de hoje. Escolha UM lugar e conte lá a
-história de hoje, com começo, meio e fim ao longo dos quatro beats. Nível de
+história de hoje, com começo, meio e fim ao longo dos três beats. Nível de
 especificidade esperado (exemplos só para calibrar, não copie): {', '.join(semente)}.
+{arco}
 
 O VÍDEO DÁ VOLTA. Ele reinicia sozinho, então o beat {len(BEATS)} não é o fim de
 nada: a foto seguinte a ele é a do beat 1, ele acordando outra vez. Escreva a
@@ -482,12 +499,14 @@ def _alinhar(cenas: list[dict]) -> list[dict]:
     """Devolve exatamente uma cena por beat, na ordem de BEATS.
 
     A quantidade de cenas é a única parte do formato que o schema não consegue
-    exigir (o modo estrito não tem `minItems`/`maxItems`), e com 16 beats o
-    modelo erra a conta de vez em quando — o primeiro run com o formato novo
-    voltou com 17. Como o nome do beat é `enum`, dá para reconstruir a lista por
-    nome em vez de confiar na ordem e no comprimento: cena a mais é descartada,
-    cena fora de ordem volta para o lugar, e beat repetido fica com a primeira
-    ocorrência (a segunda costuma ser a improvisada).
+    exigir (o modo estrito não tem `minItems`/`maxItems`), e o modelo erra a
+    conta de vez em quando — na época dos dezesseis beats um run voltou com
+    dezessete. Com oito a conta é mais fácil e o erro deve ficar mais raro, mas
+    "mais raro" não é "não acontece", e quatro runs por dia encontram o caso.
+    Como o nome do beat é `enum`, dá para reconstruir a lista por nome em vez de
+    confiar na ordem e no comprimento: cena a mais é descartada, cena fora de
+    ordem volta para o lugar, e beat repetido fica com a primeira ocorrência (a
+    segunda costuma ser a improvisada).
 
     O que NÃO dá para consertar aqui é beat faltando: inventar uma cena para
     tapar o buraco produziria uma foto que não pertence ao dia. Aí é caso de
@@ -515,13 +534,13 @@ def _alinhar(cenas: list[dict]) -> list[dict]:
 
 
 def gerar_roteiro(cfg: Config, var: Variacao, recentes: list[dict]) -> dict:
-    """Devolve o roteiro do dia já validado (16 cenas, legendas no tamanho)."""
+    """Devolve o roteiro do dia já validado (uma cena por beat, legendas no tamanho)."""
     print("[roteiro] Escrevendo o dia de hoje...")
     print(var.resumo())
     cliente = OpenAI(api_key=cfg.openai_api_key)
 
     # Vale a pena repetir a chamada: o roteiro é a etapa BARATA da execução (uma
-    # chamada de texto contra 16 de imagem), e ele é o que decide se as outras
+    # chamada de texto contra oito de imagem), e ele é o que decide se as outras
     # acontecem. Desistir na primeira resposta torta é perder o run inteiro —
     # e o cron só volta daqui a algumas horas.
     for tentativa in range(1, TENTATIVAS + 1):

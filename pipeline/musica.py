@@ -14,11 +14,15 @@ mesmo, e as duas foram medidas na faixa que o canal gerou, montando o anel de
 
 - **o andamento não fecha em compasso inteiro.** O prompt pede ~75 BPM; a faixa
   veio a ~99. Não é problema em si — o problema é a consequência: a 99 BPM o
-  compasso dura 2,41s, e o laço de 31 segundos dá 12,84 compassos. Não 13. Aí o
-  cruzamento não salva nada, ele só MUDA DE LUGAR o estrago: enquanto a volta
+  compasso dura 2,41s, e o laço de 31 segundos dava 12,84 compassos. Não 13. Aí
+  o cruzamento não salva nada, ele só MUDA DE LUGAR o estrago: enquanto a volta
   toca, a batida vem certa, porque a volta é a continuação do que estava
   tocando; quando ela se apaga e o corpo assume, a grade do corpo está fora de
   fase e a batida tropeça.
+
+  Isso PIOROU quando o vídeo encolheu. A sobra é sempre menos de meio compasso,
+  mas ela é medida contra o laço inteiro: meio compasso em 31s é 4%, e em 14s é
+  9%. O conserto é o mesmo e o ajuste é maior — ver AJUSTE_MAXIMO;
 
   A medida que diz isso em um número: o laço tem que ter um número INTEIRO de
   pulsos, senão a primeira batida depois de recomeçar não cai onde cairia se a
@@ -46,10 +50,15 @@ FOLGA segundos mais longa do que precisa, e o que sobra vira margem para:
    tropeçar. Com ele, o laço vai de 51,35 pulsos para 52,01: menos de um
    centésimo de pulso fora, que é a precisão da própria medida.
 
-O laço é DUR_AUDIO, e não os 31s do vídeo: a faixa de áudio é encurtada até
-fechar um bloco do AAC, e é esse tamanho que se repete quando o Short reinicia
-(o porquê está em config.py). Alinhar os compassos aos 31s do vídeo deixaria a
+O laço é `Ritmo.audio`, e não a duração do vídeo: a faixa de áudio é encurtada
+até fechar um bloco do AAC, e é esse tamanho que se repete quando o Short
+reinicia (o porquê está em config.py). Alinhar os compassos ao vídeo deixaria a
 diferença de fora da conta.
+
+Esse número chega aqui por PARÂMETRO, e não de uma constante importada, porque o
+vídeo deixou de ter duração fixa: o tamanho do laço só existe depois que o
+roteiro do dia decide os cortes. Quando `gerar_musica` é chamada, ele já está
+decidido — o ritmo é montado antes da trilha ser encomendada (ver main.py).
 
 O compasso é medido por autocorrelação do envelope de ataque (ver `_compasso`),
 com a stdlib e nada mais. Note que errar o compasso por uma oitava (achar meio
@@ -64,7 +73,7 @@ from pathlib import Path
 
 import requests
 
-from .config import CAUDA_LOOP, DUR_AUDIO, TAXA_AUDIO, Config
+from .config import CAUDA_LOOP, TAXA_AUDIO, Config
 
 API_MUSICA = "https://api.elevenlabs.io/v1/music"
 
@@ -94,9 +103,27 @@ FAIXA_COMPASSO = (2.0, 4.0)
 # esticar por um compasso errado é pior do que não esticar.
 CONFIANCA_MINIMA = 0.15
 
-# Teto do ajuste de andamento. A conta nunca passa de ~6,5% por construção
-# (metade do compasso em 31s); o teto está aqui para o caso de a conta mudar.
-AJUSTE_MAXIMO = 0.08
+# Teto do ajuste de andamento. Ele SUBIU de 0,08 para 0,20 quando o vídeo deixou
+# de ter 31s fixos, e o motivo é aritmética, não gosto.
+#
+# O que se pede ao `atempo` é sempre a mesma coisa: fechar a fração de compasso
+# que sobra no laço, que por construção é menos de meio compasso. Só que o ajuste
+# é essa sobra DIVIDIDA PELO LAÇO, e o laço encolheu. Com 31s e um compasso de
+# 2,4s, meio compasso era 3,9%; com um vídeo de 11s (o dia mais corrido possível)
+# e um compasso de 4s (o topo de FAIXA_COMPASSO), meio compasso é 18%.
+#
+# Manter 0,08 não pouparia nada: a trilha simplesmente iria sem esticar, e o laço
+# tropeçaria toda volta — que é o defeito que este arquivo inteiro existe para
+# consertar. E 18% de andamento numa faixa que ninguém nunca ouviu não é audível
+# como "rápido": não existe original com que comparar, o `atempo` não mexe na
+# afinação, e o que sai é uma faixa lo-fi num BPM levemente diferente do que a
+# ElevenLabs sorteou.
+#
+# O teto não some porque ele nunca foi sobre fidelidade: ele é a rede contra
+# MEDIÇÃO ERRADA. Um pedido de ajuste acima disto não é uma sobra de compasso, é
+# um compasso que foi medido errado — e esticar por um compasso errado é pior do
+# que não esticar.
+AJUSTE_MAXIMO = 0.20
 
 # Quanto o recorte pode entrar na faixa, no máximo, procurando o miolo dela.
 DESLOCAMENTO_MAXIMO = 4.0
@@ -257,7 +284,7 @@ def _compasso(env: list[float]) -> tuple[float, float]:
 
     # Do pulso encontrado para uma unidade do tamanho de um compasso. Dobrar ou
     # dividir é seguro porque o que se vai exigir dela — caber um número inteiro
-    # de vezes nos 31s — vale igual para o compasso e para seus múltiplos.
+    # de vezes no laço — vale igual para o compasso e para seus múltiplos.
     compasso = pulso
     while 0 < compasso < FAIXA_COMPASSO[0]:
         compasso *= 2
@@ -266,36 +293,36 @@ def _compasso(env: list[float]) -> tuple[float, float]:
     return compasso, confianca
 
 
-def _ajuste_de_andamento(compasso: float, confianca: float) -> float:
-    """Fator de `atempo` que faz DUR_AUDIO dar um número inteiro de compassos."""
+def _ajuste_de_andamento(compasso: float, confianca: float, dur_audio: float) -> float:
+    """Fator de `atempo` que faz o laço dar um número inteiro de compassos."""
     if not compasso or confianca < CONFIANCA_MINIMA:
         print(
             f"[musica] Compasso não identificado com segurança (confiança "
             f"{confianca:.2f}); a trilha vai no andamento original."
         )
         return 1.0
-    compassos = max(round(DUR_AUDIO / compasso), 1)
-    fator = compassos * compasso / DUR_AUDIO
+    compassos = max(round(dur_audio / compasso), 1)
+    fator = compassos * compasso / dur_audio
     if abs(fator - 1) > AJUSTE_MAXIMO:
         print(f"[musica] Ajuste de andamento de {fator:.3f}x é grande demais; ignorado.")
         return 1.0
     print(
         f"[musica] Compasso de {compasso:.3f}s ({240 / compasso:.0f} BPM em 4/4, "
-        f"confiança {confianca:.2f}): {compassos} compassos em {DUR_AUDIO:.3f}s "
+        f"confiança {confianca:.2f}): {compassos} compassos em {dur_audio:.3f}s "
         f"com andamento {fator:.4f}x."
     )
     return fator
 
 
-def _costurar(bruta: Path, destino: Path) -> Path:
+def _costurar(bruta: Path, destino: Path, dur_audio: float) -> Path:
     """Recorta o miolo da faixa e ajusta o andamento; devolve o destino.
 
-    O que sai daqui tem exatamente DUR_AUDIO + CAUDA_LOOP segundos, sem silêncio
-    nas pontas e com os DUR_AUDIO iniciais valendo um número inteiro de
-    compassos — que é a forma que o anel de áudio de video.py precisa receber
+    O que sai daqui tem exatamente ``dur_audio + CAUDA_LOOP`` segundos, sem
+    silêncio nas pontas e com os ``dur_audio`` iniciais valendo um número inteiro
+    de compassos — que é a forma que o anel de áudio de video.py precisa receber
     para o fim voltar ao começo sem tropeço.
     """
-    precisa = DUR_AUDIO + CAUDA_LOOP
+    precisa = dur_audio + CAUDA_LOOP
     env, pico = _envelope(bruta)
     inicio, fim = _bordas(env, pico)
     disponivel = fim - inicio
@@ -306,7 +333,7 @@ def _costurar(bruta: Path, destino: Path) -> Path:
     if disponivel <= 1.0:
         raise ValueError(f"a faixa só tem {disponivel:.2f}s de som")
 
-    fator = _ajuste_de_andamento(*_compasso(env))
+    fator = _ajuste_de_andamento(*_compasso(env), dur_audio)
     largura = precisa * fator
 
     # Onde começar dentro da faixa. O meio do que sobra, com teto: o começo de
@@ -356,8 +383,12 @@ def _costurar(bruta: Path, destino: Path) -> Path:
     return destino
 
 
-def gerar_musica(cfg: Config, destino: Path) -> Path | None:
-    """Compõe a trilha e devolve o caminho; None se a ElevenLabs falhar.
+def gerar_musica(cfg: Config, destino: Path, dur_audio: float) -> Path | None:
+    """Compõe a trilha do tamanho do laço e devolve o caminho; None se falhar.
+
+    ``dur_audio`` é ``Ritmo.audio``: a duração do laço de áudio do vídeo de hoje.
+    Ela vem de fora porque o vídeo não tem mais duração fixa — quem chama já sabe
+    quanto o dia somou, e é esse número que a trilha precisa cobrir.
 
     Falha aqui NÃO derruba a execução: um Short mudo ainda é um Short no ar, e
     perder o vídeo inteiro por causa da trilha seria trocar um problema pequeno
@@ -380,7 +411,7 @@ def gerar_musica(cfg: Config, destino: Path) -> Path | None:
                 # `_costurar` gasta jogando fora as pontas mortas e escolhendo de
                 # onde recortar.
                 "prompt": PROMPT,
-                "music_length_ms": int((DUR_AUDIO + CAUDA_LOOP + FOLGA) * 1000),
+                "music_length_ms": int((dur_audio + CAUDA_LOOP + FOLGA) * 1000),
                 "model_id": cfg.musica_model,
                 "force_instrumental": True,
             },
@@ -402,7 +433,7 @@ def gerar_musica(cfg: Config, destino: Path) -> Path | None:
         return None
 
     try:
-        return _costurar(bruta, destino)
+        return _costurar(bruta, destino, dur_audio)
     except (subprocess.CalledProcessError, OSError, ValueError) as erro:
         # A costura é uma melhora, não um requisito: se a análise falhar, a faixa
         # crua ainda toca. O loop fica pior, o vídeo sai.

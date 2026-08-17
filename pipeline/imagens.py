@@ -1,9 +1,9 @@
-"""As 16 fotos do story, geradas pelo gpt-image-2.
+"""As 8 fotos do story, geradas pelo gpt-image-2.
 
-O problema difícil aqui não é fazer imagem bonita: é fazer o MESMO gato dezesseis
+O problema difícil aqui não é fazer imagem bonita: é fazer o MESMO gato oito
 vezes. Um canal de personagem morre no instante em que o espectador percebe que
-o gato de cada foto é um gato diferente — e dobrar o número de fotos dobra as
-chances de ele perceber.
+o gato de cada foto é um gato diferente — e com oito fotos, cada uma ficando de
+1,3s a 3,5s na tela, ele tem MAIS tempo para reparar em cada uma, não menos.
 
 A solução é ``images.edit`` com imagem de referência (o gpt-image-2 aceita uma
 lista delas e processa todas em alta fidelidade). Duas classes de referência
@@ -93,7 +93,7 @@ the orange cat. Also a REAL cat with normal cat anatomy."""
 #
 # Antes estava tudo junto aqui, e era o defeito de fábrica do canal: a selfie
 # dizia "low angle, close to his face" e a foto de outros dizia "from a short
-# distance". Dezesseis fotos e duas distâncias — o vídeo virava slideshow por
+# distance". Duas distâncias para o vídeo inteiro — ele virava slideshow por
 # construção, e nenhuma variação de duração de corte podia consertar isso, porque
 # o problema não era o tempo, era o olho não ter que reajustar nada.
 SELFIE = """\
@@ -109,7 +109,7 @@ quickly to catch the moment."""
 
 
 def _clima(var: Variacao) -> str:
-    """A condição do dia, igual nas 16 fotos.
+    """A condição do dia, igual nas 8 fotos.
 
     Está aqui, e não só no roteiro, porque o modelo de imagem ignora o que não
     lhe é dito: sem esta linha, metade das fotos sairia com um tempo e a outra
@@ -118,19 +118,29 @@ def _clima(var: Variacao) -> str:
     return f"WEATHER AND SEASON, the same in every photo of this story — {var.clima_en}."
 
 
-def _personagens(var: Variacao) -> list[tuple[str, str]]:
-    """(nome procurado na cena, bloco de descrição) de cada coadjuvante de hoje."""
-    elenco = [("black", BLACK)]
+def _personagens(var: Variacao) -> list[tuple[str, tuple[str, ...], str]]:
+    """(chave, nomes procurados na cena, bloco de descrição) de cada coadjuvante.
+
+    A chave identifica o personagem no resto do arquivo (é ela que casa a cena
+    com a foto-âncora dele); os NOMES são todas as formas pelas quais o roteiro
+    pode tê-lo escrito. Os dois são separados porque nome composto às vezes volta
+    encurtado — ver `Personagem.apelidos`.
+    """
+    elenco = [("black", ("black",), BLACK)]
     if var.convidado:
         elenco.append(
-            (var.convidado.chave.lower(), var.convidado.visual)
+            (var.convidado.chave.lower(), var.convidado.nomes(), var.convidado.visual)
         )
     return elenco
 
 
 def _presentes(cena: dict, var: Variacao) -> list[tuple[str, str]]:
     texto = (cena.get("cena") or "").lower()
-    return [(chave, bloco) for chave, bloco in _personagens(var) if chave in texto]
+    return [
+        (chave, bloco)
+        for chave, nomes, bloco in _personagens(var)
+        if any(nome in texto for nome in nomes)
+    ]
 
 
 def _prompt(cena: dict, var: Variacao, enquadramento: Enquadramento) -> str:
@@ -155,9 +165,9 @@ def _gerar(
 ) -> Path:
     """Gera uma foto e salva em ``destino``. Aborta a execução se não sair.
 
-    Não há fallback: 16 imagens é a estrutura do vídeo, e repetir uma foto para
-    tapar buraco é exatamente o tipo de defeito que o espectador nota — mais
-    ainda com o corte a cada 2s, em que a foto repetida volta rápido.
+    Não há fallback: as oito imagens são a estrutura do vídeo, e repetir uma foto
+    para tapar buraco é exatamente o tipo de defeito que o espectador nota — com
+    oito fotos, uma repetida é um oitavo do vídeo sendo a mesma coisa duas vezes.
     """
     cliente = OpenAI(api_key=cfg.openai_api_key)
     prompt = _prompt(cena, var, enquadramento)
@@ -199,7 +209,7 @@ def _gerar(
 
 
 def gerar_imagens(cfg: Config, roteiro: dict, var: Variacao) -> list[Path]:
-    """Gera as 16 fotos na ordem dos beats e devolve os caminhos."""
+    """Gera as 8 fotos na ordem dos beats e devolve os caminhos."""
     cenas = roteiro["cenas"]
     pasta = cfg.saida / "imagens"
     pasta.mkdir(parents=True, exist_ok=True)
@@ -218,9 +228,13 @@ def gerar_imagens(cfg: Config, roteiro: dict, var: Variacao) -> list[Path]:
     # pode fixar dois coadjuvantes de uma vez, e é por isso que os índices são
     # coletados antes de gerar qualquer coisa.
     primeira: dict[str, int] = {}
-    for chave, _ in _personagens(var):
+    for chave, nomes, _ in _personagens(var):
         indice = next(
-            (i for i, cena in enumerate(cenas) if chave in (cena.get("cena") or "").lower()),
+            (
+                i
+                for i, cena in enumerate(cenas)
+                if any(nome in (cena.get("cena") or "").lower() for nome in nomes)
+            ),
             None,
         )
         if indice is not None:
@@ -250,9 +264,9 @@ def gerar_imagens(cfg: Config, roteiro: dict, var: Variacao) -> list[Path]:
                 refs.append(caminhos[ancora])
         return refs
 
-    # Onda 2: o resto em paralelo. O teto subiu de 4 para 6 quando as fotos
-    # passaram de 8 para 16: com 4 seriam quatro levas em vez de duas, e o cron
-    # roda quatro vezes por dia com horário marcado. Seis chamadas simultâneas de
+    # Onda 2: o resto em paralelo. O teto de 6 ficou de quando eram 16 fotos, e
+    # continua: com 8 fotos e um ou dois coadjuvantes fixados na onda 1, sobram
+    # seis ou sete pendentes, que é uma leva só. Seis chamadas simultâneas de
     # `high` levam ~1 min cada, o que dá ~6 requisições por minuto — bem abaixo
     # do limite da conta, que é o motivo de o teto existir.
     pendentes = [i for i in range(len(cenas)) if caminhos[i] is None]

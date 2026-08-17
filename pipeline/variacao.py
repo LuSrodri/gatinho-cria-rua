@@ -16,12 +16,17 @@ O que é sorteado (o recheio):
   foto e o movimento de câmera de cada foto.
 
 O que NUNCA é sorteado (o esqueleto):
-  os 16 beats, a estética, a voz das legendas, o gato, o Black e a trilha.
+  os 8 beats, a estética, a voz das legendas, o gato, o Black e a trilha.
 
 A semente é a data + a hora do run, então:
   - as quatro execuções de um mesmo dia saem diferentes;
   - um run é reproduzível — a semente vai no log e recriar o dia é sortear com
     ela de novo.
+
+E existe uma coisa que NÃO é sorteada nem fixa: o ARCO (ver ``ARCOS``). É o
+episódio pedido, escolhido a dedo por quem roda a execução, que substitui a forma
+do rolê e traz um personagem junto. Tudo o mais do dia continua sorteado
+normalmente — o arco decide o que acontece no rolê, não que tempo faz.
 """
 
 import random
@@ -45,6 +50,18 @@ class Personagem:
     chave: str  # como o roteiro deve chamá-lo (e como imagens.py o encontra)
     resumo: str  # PT, para o roteirista
     visual: str  # EN, para o modelo de imagem
+    # Outros jeitos de o roteiro escrever o mesmo nome. imagens.py acha o
+    # personagem procurando o nome dele dentro do campo "cena", e nome de duas
+    # palavras é onde isso falha: o prompt manda escrever "Junin do Grau", o
+    # modelo escreve "Junin" numa das três cenas em que ele aparece, e aquela
+    # foto sai sem a descrição dele E sem a foto-âncora de referência — um gato
+    # preto e branco diferente no meio da própria briga. Um apelido custa uma
+    # linha e fecha o buraco.
+    apelidos: tuple[str, ...] = ()
+
+    def nomes(self) -> tuple[str, ...]:
+        """Tudo que, aparecendo numa cena, significa que ele está nela."""
+        return (self.chave.lower(),) + tuple(a.lower() for a in self.apelidos)
 
 
 ELENCO = [
@@ -71,6 +88,7 @@ ELENCO = [
         "SEU BIGODE — an old white cat, thick fluffy coat, very long whiskers, one "
         "ear slightly torn, calm amber eyes, a little heavy. A REAL cat with "
         "normal cat anatomy.",
+        apelidos=("bigode",),
     ),
     Personagem(
         "Nescau",
@@ -87,6 +105,7 @@ ELENCO = [
         "DONA CIDA — an elderly neighbour, seen only partially and never her face: "
         "her hands putting down a bowl, her sandals and the hem of a floral dress, "
         "or her silhouette in a lit doorway. Warm and gentle presence.",
+        apelidos=("cida",),
     ),
     Personagem(
         "Tico",
@@ -96,6 +115,30 @@ ELENCO = [
         "on his muzzle, bright green eyes. A REAL cat with normal cat anatomy.",
     ),
 ]
+
+# O Junin do Grau, pedido nos comentários do canal ("faz a parte 1 da briga, eu
+# quero o gato preto e branco chamado de junin do grau"). Personagem de
+# espectador, e por isso ele existe: um canal de bairro fica maior quando quem
+# assiste consegue colocar alguém na rua.
+#
+# Ele fica FORA do ELENCO, e isso é a decisão que importa aqui. O elenco é
+# sorteado — quem cai no sorteio aparece como visita simpática do rolê —, e o
+# Junin não é visita: é o rival. Se ele entrasse no sorteio, apareceria numa
+# noite de CELEBRAÇÃO ou de CUIDADO sem que nada explicasse o que ele está
+# fazendo ali, e a treta que ele carrega queimaria numa aparição qualquer. Ele
+# entra pelo ARCO, quando o episódio é dele.
+JUNIN = Personagem(
+    "Junin do Grau",
+    "gato preto e branco da outra rua, o moleque do grau. Anda com a molecada "
+    "das bikes, empina na descida e se acha o dono do pedaço. Não é vilão: é o "
+    "metido que todo bairro tem, e ele provoca.",
+    "JUNIN DO GRAU — a black-and-white tuxedo cat: glossy black back, head and "
+    "tail, with a clean white chest and belly, white muzzle, four white paws and "
+    "a small white blaze between the eyes. Lean and wiry, cocky posture, ears "
+    "forward, one ear slightly nicked, bright green eyes with a confident stare. "
+    "About the same age as the orange cat. A REAL cat with normal cat anatomy.",
+    apelidos=("junin",),
+)
 
 # ---- As tabelas do sorteio ---------------------------------------------------
 
@@ -184,7 +227,7 @@ FORMAS = [
     "um CUIDADO: eles tomam conta de alguém menor pelo resto da noite",
 ]
 
-# O tempero: um fio solto que atravessa as 16 fotos. Uma coisa só, pequena.
+# O tempero: um fio solto que atravessa as 8 fotos. Uma coisa só, pequena.
 TEMPEROS = [
     "ele está juntando dinheiro (do jeito dele) para alguma coisa",
     "ele achou um objeto no caminho e carrega o dia inteiro",
@@ -197,6 +240,108 @@ TEMPEROS = [
     "ele está estreando uma coisa (lugar novo, caminho novo, jeito novo)",
     "tem prova na escola de manhã e ele não estudou",
 ]
+
+# ---- Arcos: o episódio pedido -------------------------------------------------
+
+# Um arco é um rolê ESCOLHIDO em vez de sorteado, com um personagem que vem
+# junto. Existe porque o canal começou a receber pedido de espectador, e pedido
+# de espectador não cabe numa tabela de sorteio: quem pediu quer ver AQUELE
+# episódio, não uma chance em dez de ele sair algum dia.
+#
+# O arco entra por `--arco` na linha de comando ou pela env var ARCO (que é como
+# o cron do Render roda um episódio pedido: define a variável, deixa o run
+# acontecer, tira a variável). Sem arco, nada muda — o dia é sorteado como
+# sempre foi.
+#
+# O arco substitui DUAS coisas do sorteio, e só elas: a forma do rolê e o
+# convidado do dia. O tempo, a época, o humor, o tempero, o gancho, os âncoras e
+# a escala de plano continuam sorteados — um episódio especial ainda é um dia
+# comum na vida dele, e é isso que impede o arco de virar outro canal.
+
+
+@dataclass(frozen=True)
+class Arco:
+    """Um episódio pedido: quem aparece, que forma o rolê tem e como se escreve."""
+
+    chave: str
+    personagem: Personagem
+    forma: str  # entra no lugar do sorteio de FORMAS
+    instrucao: str  # bloco PT que vai inteiro para o prompt do roteirista
+
+
+BRIGA_1 = """\
+O ARCO DE HOJE — A BRIGA COM O JUNIN DO GRAU, PARTE 1
+Hoje não é um rolê comum: é o primeiro capítulo de uma treta, e um espectador
+pediu esse capítulo pelo nome nos comentários. O rolê é a treta, e ela NÃO se
+resolve hoje.
+
+QUEM É O JUNIN
+Gato preto e branco da outra rua, o moleque do grau. Anda com a molecada das
+bikes, empina na descida, para o mundo para ver se alguém viu, e se acha o dono
+do pedaço. Não é vilão de desenho e não é ameaça: é o metido que todo bairro
+tem, aquele que ninguém odeia e todo mundo acha demais. Ele provoca. Escreva o
+nome "Junin do Grau" nos campos "cena" em que ele aparecer.
+
+COMO A TRETA ACONTECE, NOS TRÊS BEATS DO ROLÊ
+- primeiro beat do rolê: os dois chegam e o Junin já está lá, no meio do lugar
+  que era deles. A primeira encarada, de longe, sem uma palavra;
+- segundo beat: a provocação. Ele empina na frente dos dois, ou toma o lugar
+  deles, ou mexe com o Black. O tom sobe. Ninguém encosta em ninguém;
+- terceiro beat: o IMPASSE, e o vídeo não passa disso. Os dois frente a frente
+  em cima do muro, pelo arrepiado, rabo grosso, orelha para trás, olho no olho —
+  e acaba assim. Sem briga corporal, sem vencedor, sem ninguém pedir desculpa,
+  sem ninguém ir embora derrotado.
+
+BRIGA DE GATO É ENCARADA
+Costas arqueadas, pelo em pé, rabo de escova, miado grave e comprido, um passo à
+frente e um passo atrás em cima do muro, as orelhas coladas na cabeça. NUNCA
+sangue, NUNCA ferimento, NUNCA gato machucado, NUNCA violência explícita, NUNCA
+dente à mostra rasgando nada. A estética do canal continua valendo inteira: o
+bairro é bonito, a luz é bonita, e a única coisa feia na foto é o clima entre os
+dois.
+
+DEPOIS DO ROLÊ
+Os dois últimos beats seguem a rotina — a volta na madrugada e o busão —, mas
+com ele remoendo o que aconteceu. Ele não resolve, não conclui e não comenta que
+vai ter continuação.
+
+O QUE NÃO PODE APARECER NA LEGENDA
+Nunca escreva "parte 1", "continua", "amanhã tem mais" nem qualquer coisa que
+aponte para fora do vídeo. O Short reinicia sozinho, e um aviso desses é
+exatamente o tipo de coisa que denuncia que o vídeo acabou. O "parte 1" vive no
+TÍTULO e na DESCRIÇÃO — é lá que quem pediu vai procurar, e é lá que ele tem que
+achar."""
+
+ARCOS = {
+    "briga-1": Arco(
+        chave="briga-1",
+        personagem=JUNIN,
+        forma=(
+            "uma BRIGA, parte 1: o Junin do Grau aparece no rolê, provoca, e a "
+            "noite acaba num impasse que não se resolve"
+        ),
+        instrucao=BRIGA_1,
+    ),
+}
+
+
+def arco_de(nome: str | None) -> Arco | None:
+    """Resolve o nome do arco pedido. Sem nome, dia comum.
+
+    Nome desconhecido derruba a execução na hora, e de propósito: o arco chega
+    por env var no Render, um erro de digitação em `ARCO` passaria despercebido
+    e o cron publicaria um dia comum no lugar do episódio pedido — que é
+    justamente o run que alguém está esperando ver.
+    """
+    nome = (nome or "").strip().lower()
+    if not nome:
+        return None
+    if nome not in ARCOS:
+        raise SystemExit(
+            f"Arco '{nome}' não existe. Disponíveis: {', '.join(sorted(ARCOS))}."
+        )
+    return ARCOS[nome]
+
 
 # ---- O gancho -----------------------------------------------------------------
 
@@ -280,15 +425,6 @@ ANCORAS = {
         "sobe na caixa d'água para enxergar longe",
         "bate na grade com a pata, três vezes",
     ],
-    "o que ele vê da rua quando ainda está mole": [
-        "as crianças voltando da escola no fim da tarde",
-        "o vizinho regando o jardim, a água escurecendo a calçada",
-        "a roupa balançando no varal da laje de frente",
-        "o portão da padaria sendo aberto para a noite",
-        "os pardais brigando pelo último sol no fio",
-        "um carro velho sendo lavado na porta de casa",
-        "a sombra do ipê andando devagar pelo muro",
-    ],
     "por onde eles voltam na madrugada": [
         "pela viela da escadaria, degrau por degrau",
         "pelo meio da rua vazia, os dois no asfalto",
@@ -297,16 +433,7 @@ ANCORAS = {
         "pelo campinho apagado, atravessando o gramado molhado",
         "pela beira da praça, no orvalho do banco",
     ],
-    "de onde ele vê o nascer do sol": [
-        "da laje mais alta da rua",
-        "de cima da passarela",
-        "da arquibancada da quadra",
-        "do último degrau da escadaria",
-        "de cima da caixa d'água",
-        "do banco da praça, os dois calados",
-        "do próprio ponto de ônibus",
-    ],
-    "o detalhe do busão": [
+    "o detalhe do busão, no nascer do sol": [
         "o primeiro busão do dia, quase vazio",
         "o busão lotado, ele espremido na janela",
         "o busão que passa na frente da padaria e entra cheirando a pão",
@@ -316,9 +443,16 @@ ANCORAS = {
     ],
 }
 
-# Quantas das 16 fotos são de OUTROS gatos (o resto é selfie). Faixa, não número
-# fixo: um vídeo com 6 selfies e outro com 10 já parecem vídeos diferentes.
-FAIXA_OUTROS = (6, 10)
+# Dois âncoras saíram junto com os beats que os hospedavam: "o que ele vê da rua
+# quando ainda está mole" morava no espreguiçar, e "de onde ele vê o nascer do
+# sol" morava num beat só do amanhecer. Com 8 fotos, o amanhecer e o busão são a
+# mesma foto — daí o rótulo do último âncora ter ganhado a hora do dia.
+
+# Quantas das 8 fotos são de OUTROS gatos (o resto é selfie). Faixa, não número
+# fixo: um vídeo com 3 selfies e outro com 5 já parecem vídeos diferentes. A
+# faixa desceu junto com o total (era 6 a 10 em 16) e guarda a mesma proporção —
+# entre um terço e dois terços das fotos.
+FAIXA_OUTROS = (3, 5)
 
 # Chance de ter alguém do elenco no rolê de hoje. Não é 100% porque noite de
 # rolê só dos dois também precisa existir — senão a "visita" deixa de ser visita.
@@ -332,11 +466,15 @@ CHANCE_CONVIDADO = 0.7
 #
 # O problema era que o enquadramento estava congelado dentro dos blocos "selfie"
 # e "outros" de imagens.py: TODA selfie era "low angle, close to his face" e TODA
-# foto de outros era "from a short distance". Dezesseis fotos, duas distâncias.
-# Aí o corte pode variar de 1,3s a 3,5s à vontade — o olho continua vendo a mesma
-# imagem em tamanhos iguais, e é isso que lê como apresentação de slides. Ritmo
-# visual é CONTRASTE DE ESCALA: o olho tem que reajustar a cada corte, e é o
-# reajuste que dá a sensação de montagem.
+# foto de outros era "from a short distance". Duas distâncias para o vídeo
+# inteiro. Aí o corte pode variar de 1,3s a 3,5s à vontade — o olho continua
+# vendo a mesma imagem em tamanhos iguais, e é isso que lê como apresentação de
+# slides. Ritmo visual é CONTRASTE DE ESCALA: o olho tem que reajustar a cada
+# corte, e é o reajuste que dá a sensação de montagem.
+#
+# Com 8 fotos isso pesa mais, não menos: são metade das oportunidades de
+# contrastar, e cada foto fica na tela mais tempo para o olho reparar que ela é
+# do mesmo tamanho da anterior.
 #
 # `familia` é o que faz o trabalho. A regra do sorteio não é "não repetir o
 # enquadramento" (dois planos médios diferentes ainda são dois planos médios): é
@@ -474,8 +612,10 @@ def _sortear_enquadramentos(
        trabalho — dois planos médios diferentes seguidos ainda são duas fotos do
        mesmo tamanho;
     2. os três enquadramentos das pontas (macro, aberto, contra-plongée) aparecem
-       pelo menos uma vez. Sorteio livre às vezes devolve dezesseis fotos entre
-       médio e close, que é justamente a média de onde estamos saindo;
+       pelo menos uma vez. Sorteio livre às vezes devolve um vídeo inteiro entre
+       médio e close, que é justamente a média de onde estamos saindo. Em 8
+       fotos os três obrigatórios ocupam quase metade da sequência, e é para
+       ocuparem: com poucas fotos, uma escala que não aparece não aparece mesmo;
     3. os enquadramentos que não cabem numa selfie não passam do número de fotos
        "de outros" do dia, senão o roteiro receberia uma exigência impossível.
 
@@ -499,7 +639,7 @@ def _sortear_enquadramentos(
         return all(e.familia != v.familia for v in vizinhos)
 
     # Os obrigatórios primeiro, um em cada terço do vídeo: espalhados, o contraste
-    # aparece três vezes ao longo dos 31s em vez de tudo no mesmo trecho.
+    # aparece três vezes ao longo dele em vez de tudo no mesmo trecho.
     obrigatorios = [e for e in ENQUADRAMENTOS if e.chave in ENQUADRAMENTOS_OBRIGATORIOS]
     rng.shuffle(obrigatorios)
     faixa = (total - 1) / len(obrigatorios)
@@ -588,25 +728,25 @@ class Variacao:
     quantas_outros: int
     enquadramentos: list[Enquadramento] = field(default_factory=list)
     movimentos: list[Movimento] = field(default_factory=list)
+    arco: Arco | None = None
 
     def resumo(self) -> str:
         """Uma linha por item sorteado, para o log da execução."""
         visita = self.convidado.chave if self.convidado else "ninguém (só os dois)"
-        return "\n".join(
-            f"  {rotulo}: {valor}"
-            for rotulo, valor in (
-                ("semente", self.semente),
-                ("gancho", self.gancho),
-                ("tempo", self.clima),
-                ("época", self.calendario),
-                ("humor", self.humor),
-                ("rolê", self.forma),
-                ("tempero", self.tempero),
-                ("visita", visita),
-                ("fotos de outros", str(self.quantas_outros)),
-                ("escala", " ".join(e.chave for e in self.enquadramentos)),
-            )
-        )
+        linhas = [
+            ("semente", self.semente),
+            ("arco", self.arco.chave if self.arco else "nenhum (dia comum)"),
+            ("gancho", self.gancho),
+            ("tempo", self.clima),
+            ("época", self.calendario),
+            ("humor", self.humor),
+            ("rolê", self.forma),
+            ("tempero", self.tempero),
+            ("visita", visita),
+            ("fotos de outros", str(self.quantas_outros)),
+            ("escala", " ".join(e.chave for e in self.enquadramentos)),
+        ]
+        return "\n".join(f"  {rotulo}: {valor}" for rotulo, valor in linhas)
 
     def indices_so_outros(self) -> list[int]:
         """Beats cujo enquadramento não cabe numa selfie de pata esticada."""
@@ -620,7 +760,7 @@ def _movimentos(
 ) -> list[Movimento]:
     """Sorteia o movimento de cada foto, sem repetir o da anterior.
 
-    A regra de não repetir é o ponto: dezesseis fotos com o mesmo zoom dão
+    A regra de não repetir é o ponto: uma sequência inteira com o mesmo zoom dá
     sensação de esteira transportadora, e é isso que denuncia que o vídeo é
     montado. Com o corte caindo a cada segundo e pouco, a repetição aparece
     numa frequência alta o bastante para ser reconhecida como padrão.
@@ -661,12 +801,19 @@ def _movimentos(
     return movimentos
 
 
-def sortear(quando: datetime | None = None) -> Variacao:
+def sortear(quando: datetime | None = None, arco: Arco | None = None) -> Variacao:
     """Sorteia o dia de hoje. A semente é a data + a hora do run.
 
     Sai sem os movimentos de câmera de propósito: eles dependem da duração de
     cada foto, e a duração de cada foto só existe depois que o roteiro conta a
     história do dia (ver `sortear_movimentos`).
+
+    Com um arco, o sorteio acontece INTEIRO do mesmo jeito e só então a forma do
+    rolê e o convidado são trocados. Sortear e descartar parece desperdício e não
+    é: a corrente aleatória é uma sequência, e pular duas tiradas desloca todas
+    as seguintes. Fazendo assim, o dia 2026-08-16-13 tem o mesmo tempo, o mesmo
+    humor, o mesmo gancho e a mesma escala de plano com arco e sem arco — o que
+    muda é só o que o arco decide mudar, e comparar os dois runs vira possível.
     """
     agora = quando or datetime.now()
     semente = agora.strftime("%Y-%m-%d-%H")
@@ -676,7 +823,7 @@ def sortear(quando: datetime | None = None) -> Variacao:
     convidado = rng.choice(ELENCO) if rng.random() < CHANCE_CONVIDADO else None
     quantas_outros = rng.randint(*FAIXA_OUTROS)
 
-    return Variacao(
+    var = Variacao(
         semente=semente,
         clima=clima,
         clima_en=clima_en,
@@ -690,6 +837,12 @@ def sortear(quando: datetime | None = None) -> Variacao:
         quantas_outros=quantas_outros,
         enquadramentos=_sortear_enquadramentos(rng, TOTAL_IMAGENS, quantas_outros),
     )
+
+    if arco:
+        var.arco = arco
+        var.forma = arco.forma
+        var.convidado = arco.personagem
+    return var
 
 
 def sortear_movimentos(var: Variacao, duracoes: list[float]) -> None:
